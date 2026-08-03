@@ -1,5 +1,8 @@
-﻿import type { Metadata } from "next";
+import type { Metadata } from "next";
 import "./globals.css";
+import "katex/dist/katex.min.css";
+import "./reader.css";
+import "./editor.css";
 
 export const metadata: Metadata = {
   title: "矿脉日志 MINELOG",
