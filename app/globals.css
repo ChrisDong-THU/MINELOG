@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import "tailwindcss/index.css";
 
 @font-face {
   font-family: "Ark Pixel";
