@@ -209,7 +209,7 @@
 .markdown-body th:last-child,
 .markdown-body td:last-child { border-right: 0; }
 .markdown-body tbody tr:hover { background: rgba(117, 140, 79, .07); }
-.markdown-body img { display: block; max-width: 100%; height: auto; margin: 1.25em auto; border: 1px solid #d0cbc0; }
+.markdown-body img { display: block; max-width: 100%; height: auto; margin: 1.25em auto; border: 0; }
 .markdown-body input[type="checkbox"] { margin-right: .55em; accent-color: #6f8d43; }
 .markdown-body .contains-task-list { padding-left: .35em; list-style: none; }
 .markdown-body .task-list-item { list-style: none; }

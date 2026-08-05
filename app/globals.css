@@ -55,6 +55,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--lime); outline-
   display: flex;
   justify-content: space-between;
   align-items: center;
+  min-height: 90px;
   padding: 22px clamp(18px,3vw,54px);
   pointer-events: none;
 }
@@ -78,23 +79,32 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--lime); outline-
   letter-spacing: .1em;
   text-shadow: 2px 0 #202220, 0 2px #202220, 2px 2px #202220;
 }
-.local-mode-badge {
+.brand-lockup.is-local { gap: 14px; }
+.brand-icon-stack {
+  position: relative;
+  flex: 0 0 29px;
+  width: 29px;
+  height: 29px;
+}
+.local-sync-off {
   position: absolute;
-  top: -8px;
   right: -5px;
-  padding: 2px 4px 1px;
-  border: 1px solid rgba(202,223,139,.72);
-  background: rgba(18,24,14,.88);
-  color: #d8ef91;
-  font-family: var(--font-pixel), monospace;
-  font-size: 7px;
-  line-height: 1;
-  letter-spacing: .12em;
-  text-shadow: 1px 1px #111;
-  box-shadow: 1px 1px rgba(0,0,0,.65);
+  bottom: -4px;
+  width: 17px;
+  height: 17px;
+  filter: drop-shadow(1px 2px 0 rgba(0,0,0,.75));
   pointer-events: none;
 }
+.local-sync-off svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.local-sync-off-cloud { fill: #2f8cff; }
+.local-sync-off-slash {
+  fill: none;
+  stroke: #3158ec;
+  stroke-width: 2.8;
+  stroke-linecap: round;
+}
 .brand-cube {
+  display: block;
   width: 29px;
   height: 29px;
   border: 2px solid #101210;
@@ -946,7 +956,7 @@ html[data-page-direction="backward"]::view-transition-new(page-content) { animat
   .section-page { width: min(760px,92vw); }
 }
 @media (max-width: 620px) {
-  .topbar { padding: 14px; }
+  .topbar { min-height: 70px; padding: 14px; }
   .game-icon-button { width: 42px; height: 42px; }
   .game-icon-button img { width: 25px; height: 25px; }
   .home-content { padding-top: 88px; }

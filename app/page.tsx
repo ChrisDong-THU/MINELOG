@@ -608,7 +608,7 @@ export default function Home() {
     setContent((current) => {
       const articles = Object.fromEntries(Object.entries(current.articles).map(([id, entries]) => [id, [...entries]])) as Record<string, SectionArticle[]>;
       const markdown = { ...current.markdown };
-      if (editing.mode === "edit") {
+      if (editing.mode === "edit" && editing.title) {
         articles[editing.sectionId] = (articles[editing.sectionId] ?? []).filter((article) => article.title !== editing.title);
         delete markdown[articleMarkdownKey(editing.sectionId, editing.title)];
       }
@@ -655,8 +655,17 @@ export default function Home() {
   return <main className="minecraft-shell">
     <div className="scene-shade" />
     <header className="topbar">
-      <button className="brand-lockup" onClick={() => navigate("home")} aria-label="返回首页">
-        <span className="brand-cube" /><strong>MINELOG</strong>{__MINELOG_LOCAL_MODE__ && <span className="local-mode-badge" title="本地运行模式">LOCAL</span>}
+      <button className={`brand-lockup${__MINELOG_LOCAL_MODE__ ? " is-local" : ""}`} onClick={() => navigate("home")} aria-label="返回首页">
+        <span className="brand-icon-stack">
+          <span className="brand-cube" />
+          {__MINELOG_LOCAL_MODE__ && <span className="local-sync-off" title="本地模式：无云同步" aria-label="本地模式：无云同步">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path className="local-sync-off-cloud" d="M18.8 10.1A7 7 0 0 0 5.4 7.7 5.6 5.6 0 0 0 6 18.9h12.7a4.4 4.4 0 0 0 .1-8.8Z" />
+              <path className="local-sync-off-slash" d="M5 21 19 3" />
+            </svg>
+          </span>}
+        </span>
+        <strong>MINELOG</strong>
       </button>
       <div className="top-actions">
         {active === "home" && !immersive && <GameIconButton className="search-trigger" icon={MINECRAFT_UI_ICONS.search} label="搜索全部文章" onClick={openSearch} />}

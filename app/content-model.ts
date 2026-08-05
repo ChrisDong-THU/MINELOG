@@ -1,8 +1,10 @@
-import { getArticleMarkdown } from "./article-markdown";
 import type { ContentState, FeedEntry, SearchDocument, Section, SectionArticle } from "./content-types";
 import type { LocalArticleFile } from "./local-article-files";
 
 export const EMPTY_CONTENT_STATE: ContentState = { articles: {}, markdown: {} };
+function fallbackMarkdown(article: SectionArticle) {
+  return article.summary ? `${article.summary}\n` : "";
+}
 
 export function articleMarkdownKey(sectionId: string, title: string) {
   return `${sectionId}:${title}`;
@@ -27,7 +29,7 @@ export function contentToLocalFiles(content: ContentState, migratedAt = Date.now
   return Object.entries(content.articles).flatMap(([sectionId, articles]) => articles.map((article) => ({
     ...article,
     sectionId,
-    markdown: content.markdown[articleMarkdownKey(sectionId, article.title)] ?? getArticleMarkdown(article),
+    markdown: content.markdown[articleMarkdownKey(sectionId, article.title)] ?? fallbackMarkdown(article),
     updatedAt: new Date(migratedAt - order++ * 1000).toISOString(),
   })));
 }
@@ -66,10 +68,10 @@ export function createSearchDocuments(
     sectionLabel: section.label,
     sectionIcon: section.icon,
     article,
-    markdown: markdown[articleMarkdownKey(section.id, article.title)] ?? getArticleMarkdown(article),
+    markdown: markdown[articleMarkdownKey(section.id, article.title)] ?? fallbackMarkdown(article),
   })));
 }
 
 export function markdownForArticle(markdown: ContentState["markdown"], sectionId: string, article: SectionArticle) {
-  return markdown[articleMarkdownKey(sectionId, article.title)] ?? getArticleMarkdown(article);
+  return markdown[articleMarkdownKey(sectionId, article.title)] ?? fallbackMarkdown(article);
 }

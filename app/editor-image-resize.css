@@ -1,16 +1,39 @@
 .markdown-image-frame {
-  position: relative;
   display: block;
+  width: fit-content;
   max-width: 100%;
   margin: 1.25em auto;
 }
 
-.markdown-image-frame > img {
+.markdown-image-visual {
+  position: relative;
   display: block;
-  width: 100%;
+  max-width: 100%;
+}
+
+.markdown-image-visual > img {
+  display: block;
+  width: auto;
   max-width: 100%;
   height: auto;
-  margin: 0;
+  margin: 0 auto;
+  border: 0;
+}
+
+.markdown-image-frame.is-editable .markdown-image-visual > img,
+.markdown-image-frame.has-custom-width .markdown-image-visual > img {
+  width: 100%;
+}
+
+.markdown-image-caption {
+  display: block;
+  margin-top: 8px;
+  padding: 0 8px;
+  color: #777d76;
+  font-size: 13px;
+  line-height: 1.55;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .markdown-image-resize-handle {
@@ -46,6 +69,7 @@
 .markdown-image-resize-handle:focus-visible::before { background: #7d963f; }
 
 @media (max-width: 620px) {
+  .markdown-image-caption { margin-top: 6px; font-size: 12px; }
   .markdown-image-resize-handle.is-left { left: -18px; }
   .markdown-image-resize-handle.is-right { right: -18px; }
 }

@@ -1,4 +1,4 @@
-import { EDITOR_AUTH_PATH, editorMutationAllowed, handleEditorAuthRequest, isEditorAccessKeyConfigured } from "../../../shared/editor-auth";
+import { EDITOR_AUTH_PATH, editorMutationAllowed, handleEditorAuthRequest, isEditorAccessKeyConfigured, isProtectedEditorMutation } from "../../../shared/editor-auth";
 import { R2S3Bucket, r2S3ConfigFromEnv } from "../../../server/r2-s3-bucket";
 import { handleR2ContentRequest } from "../../../worker/r2-content";
 
@@ -10,9 +10,7 @@ async function handle(request: Request) {
   const accessKey = process.env.EDITOR_ACCESS_KEY;
   if (url.pathname === EDITOR_AUTH_PATH) return handleEditorAuthRequest(request, accessKey);
 
-  const protectsEditorWrite = request.method !== "GET" && request.method !== "HEAD"
-    && (url.pathname === "/api/local-articles" || url.pathname === "/api/local-assets" || url.pathname === "/api/sections");
-  if (protectsEditorWrite && !await editorMutationAllowed(request, accessKey)) {
+  if (isProtectedEditorMutation(request) && !await editorMutationAllowed(request, accessKey)) {
     return Response.json({ error: "请先通过编辑密钥验证" }, {
       status: isEditorAccessKeyConfigured(accessKey) ? 401 : 503,
       headers: { "cache-control": "no-store" },

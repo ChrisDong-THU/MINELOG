@@ -27,9 +27,9 @@ export function ResizableMarkdownImage({
   const drag = useRef<{ startX: number; startWidth: number; parentWidth: number; direction: -1 | 1; latest: number; frame: HTMLElement } | null>(null);
 
   const startResize = (direction: -1 | 1, event: ReactPointerEvent<HTMLButtonElement>) => {
-    const frame = event.currentTarget.parentElement;
+    const frame = event.currentTarget.closest<HTMLElement>(".markdown-image-frame");
     if (!frame) return;
-    const parentWidth = frame?.parentElement?.clientWidth ?? frame?.clientWidth ?? 1;
+    const parentWidth = frame.parentElement?.clientWidth ?? frame.clientWidth ?? 1;
     drag.current = { startX: event.clientX, startWidth: presentation.width, parentWidth, direction, latest: presentation.width, frame };
     event.currentTarget.setPointerCapture(event.pointerId);
     event.preventDefault();
@@ -51,35 +51,34 @@ export function ResizableMarkdownImage({
     onWidthChange?.(src, state.latest);
   };
 
-  if (!editable) {
-    return <img
-      loading="lazy"
-      src={presentation.cleanSrc}
-      alt={alt}
-      style={presentation.hasCustomWidth ? { ...style, width: `${presentation.width}%` } : style}
-      {...props}
-    />;
-  }
+  const caption = alt.trim();
+  const frameClassName = `markdown-image-frame${editable ? " is-editable" : ""}${presentation.hasCustomWidth ? " has-custom-width" : ""}`;
+  const frameStyle = editable || presentation.hasCustomWidth ? { width: `${presentation.width}%` } : undefined;
 
-  return <span className="markdown-image-frame is-editable" style={{ width: `${presentation.width}%` }}>
-    <img loading="lazy" src={presentation.cleanSrc} alt={alt} style={style} {...props} />
-    <button
-      type="button"
-      className="markdown-image-resize-handle is-left"
-      aria-label="从左侧调节图片宽度"
-      onPointerDown={(event) => startResize(-1, event)}
-      onPointerMove={resize}
-      onPointerUp={finishResize}
-      onPointerCancel={finishResize}
-    />
-    <button
-      type="button"
-      className="markdown-image-resize-handle is-right"
-      aria-label="从右侧调节图片宽度"
-      onPointerDown={(event) => startResize(1, event)}
-      onPointerMove={resize}
-      onPointerUp={finishResize}
-      onPointerCancel={finishResize}
-    />
+  return <span className={frameClassName} style={frameStyle}>
+    <span className="markdown-image-visual">
+      <img loading="lazy" src={presentation.cleanSrc} alt={alt} style={style} {...props} />
+      {editable && <>
+        <button
+          type="button"
+          className="markdown-image-resize-handle is-left"
+          aria-label="从左侧调节图片宽度"
+          onPointerDown={(event) => startResize(-1, event)}
+          onPointerMove={resize}
+          onPointerUp={finishResize}
+          onPointerCancel={finishResize}
+        />
+        <button
+          type="button"
+          className="markdown-image-resize-handle is-right"
+          aria-label="从右侧调节图片宽度"
+          onPointerDown={(event) => startResize(1, event)}
+          onPointerMove={resize}
+          onPointerUp={finishResize}
+          onPointerCancel={finishResize}
+        />
+      </>}
+    </span>
+    {caption && <span className="markdown-image-caption">{caption}</span>}
   </span>;
 }

@@ -32,7 +32,7 @@ test("server renders the MINELOG application shell", async () => {
 });
 
 test("keeps navigation, rendering and local content storage in focused modules", async () => {
-  const [page, navigation, storage, renderer, resizableImage, searchPage, layout, fileClient, filePlugin, assetClient, assetPlugin, editor, toolbar, articleReader, contentModel, hotbarModel, gitignore, minecraftIcons, sectionEditor] = await Promise.all([
+  const [page, navigation, storage, renderer, resizableImage, searchPage, layout, fileClient, filePlugin, assetClient, assetPlugin, editor, toolbar, articleReader, contentModel, hotbarModel, gitignore, minecraftIcons, sectionEditor, imageAssets] = await Promise.all([
     source("app/page.tsx"),
     source("app/navigation.ts"),
     source("app/browser-storage.ts"),
@@ -52,6 +52,7 @@ test("keeps navigation, rendering and local content storage in focused modules",
     source(".gitignore"),
     source("app/minecraft-icons.ts"),
     source("app/components/section-editor-modal.tsx"),
+    source("shared/image-assets.ts"),
   ]);
   const editorBase = await source("app/editor-base.css");
   const sectionPage = await source("app/components/section-page.tsx");
@@ -143,10 +144,14 @@ test("keeps navigation, rendering and local content storage in focused modules",
   assert.match(assetPlugin, /writeFile/);
   assert.match(assetPlugin, /"content", "local"/);
   assert.match(assetPlugin, /assets/);
-  assert.match(assetPlugin, /"image\/svg\+xml": "svg"/);
+  assert.match(assetPlugin, /from "\.\.\/shared\/image-assets\.ts"/);
+  assert.match(imageAssets, /"image\/svg\+xml": "svg"/);
   assert.match(renderer, /ResizableMarkdownImage/);
   assert.match(renderer, /editableImages/);
   assert.match(resizableImage, /markdown-image-resize-handle/);
+  assert.match(resizableImage, /markdown-image-caption/);
+  assert.match(resizableImage, /const caption = alt\.trim\(\)/);
+  assert.match(resizableImage, /closest<HTMLElement>\("\.markdown-image-frame"\)/);
   assert.match(resizableImage, /#width=/);
   assert.match(editor, /handleEditorPaste/);
   assert.match(editor, /saveLocalArticleImage/);
@@ -193,8 +198,12 @@ test("separates local persistence and remote device trust", async () => {
   ]);
 
   assert.match(page, /__MINELOG_LOCAL_MODE__/);
-  assert.match(page, /local-mode-badge/);
-  assert.match(styles, /\.local-mode-badge/);
+  assert.match(page, /local-sync-off/);
+  assert.match(page, /本地模式：无云同步/);
+  assert.doesNotMatch(page, />LOCAL</);
+  assert.match(styles, /\.local-sync-off/);
+  assert.match(styles, /\.topbar \{[^}]*min-height: 90px/s);
+  assert.match(styles, /\.topbar \{ min-height: 70px; padding: 14px; \}/);
   assert.match(viteConfig, /__MINELOG_LOCAL_MODE__: "true"/);
   assert.match(viteConfig, /__MINELOG_LOCAL_MODE__: "false"/);
   assert.match(viteConfig, /localSections\(\)/);

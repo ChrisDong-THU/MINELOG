@@ -29,17 +29,18 @@ export function MarkdownRenderer({
   const markdownComponents = useMemo<MarkdownComponents>(() => ({
     a: ({ href, children, ...props }) => <a href={href} target={href?.startsWith("http") ? "_blank" : undefined} rel={href?.startsWith("http") ? "noreferrer" : undefined} {...props}>{children}</a>,
     img: ({ alt, src, ...props }) => {
+      const imageSource = typeof src === "string" ? src : undefined;
       const video = alt?.match(/^video(?::\s*(.*))?$/i);
       if (video) {
         const label = video[1]?.trim() || "正文视频";
         return <figure className="markdown-video">
-          <video controls preload="metadata" src={src} aria-label={label}>当前浏览器无法播放此视频。</video>
+          <video controls preload="metadata" src={imageSource} aria-label={label}>当前浏览器无法播放此视频。</video>
           {video[1] && <figcaption>{label}</figcaption>}
         </figure>;
       }
-      if (!src) return null;
+      if (!imageSource) return null;
       return <ResizableMarkdownImage
-        src={src}
+        src={imageSource}
         alt={alt ?? ""}
         editable={editableImages}
         onWidthChange={onImageWidthChange}

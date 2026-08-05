@@ -10,7 +10,10 @@
         "build": "vinext build",
         "build:vercel": "vite build",
         "start": "vinext start",
+        "test:unit": "node --experimental-strip-types --test tests/editor-auth.test.mjs tests/r2-svg-assets.test.mjs tests/shared-storage-rules.test.mjs",
         "test": "npm run build && node --experimental-strip-types --test tests/*.test.mjs",
+        "typecheck": "tsc --noEmit",
+        "check": "npm run lint && npm run typecheck && npm test",
         "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .vercel"
     },
     "dependencies": {

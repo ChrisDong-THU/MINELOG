@@ -1,11 +1,11 @@
-﻿/** Cloudflare Worker entry point for the vinext-starter template. */
+/** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
-import { EDITOR_AUTH_PATH, editorMutationAllowed, handleEditorAuthRequest, isEditorAccessKeyConfigured } from "../shared/editor-auth";
+import { EDITOR_AUTH_PATH, editorMutationAllowed, handleEditorAuthRequest, isEditorAccessKeyConfigured, isProtectedEditorMutation } from "../shared/editor-auth";
 import { handleR2ContentRequest, type R2BucketLike } from "./r2-content";
 
 interface Env {
-  ASSETS: Fetcher;
+  ASSETS: { fetch(request: Request): Promise<Response> };
   EDITOR_ACCESS_KEY?: string;
   CONTENT_BUCKET?: R2BucketLike;
   IMAGES: {
@@ -28,9 +28,7 @@ const worker = {
 
     if (url.pathname === EDITOR_AUTH_PATH) return handleEditorAuthRequest(request, env.EDITOR_ACCESS_KEY);
 
-    const protectsEditorWrite = request.method !== "GET" && request.method !== "HEAD"
-      && (url.pathname === "/api/local-articles" || url.pathname === "/api/local-assets" || url.pathname === "/api/sections");
-    if (protectsEditorWrite && !await editorMutationAllowed(request, env.EDITOR_ACCESS_KEY)) {
+    if (isProtectedEditorMutation(request) && !await editorMutationAllowed(request, env.EDITOR_ACCESS_KEY)) {
       return Response.json({ error: "请先通过编辑密钥验证" }, {
         status: isEditorAccessKeyConfigured(env.EDITOR_ACCESS_KEY) ? 401 : 503,
         headers: { "cache-control": "no-store" },

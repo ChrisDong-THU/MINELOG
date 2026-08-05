@@ -13,9 +13,11 @@ function encodeObjectKey(key: string) {
   return key.split("/").map(encodeURIComponent).join("/");
 }
 
-function bodyValue(value: string | ArrayBuffer | ArrayBufferView | ReadableStream) {
+function bodyValue(value: string | ArrayBuffer | ArrayBufferView | ReadableStream): BodyInit {
   if (ArrayBuffer.isView(value)) {
-    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+    const copy = new Uint8Array(value.byteLength);
+    copy.set(new Uint8Array(value.buffer, value.byteOffset, value.byteLength));
+    return copy.buffer;
   }
   return value as BodyInit;
 }

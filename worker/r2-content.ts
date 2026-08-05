@@ -1,3 +1,9 @@
+import {
+  STORED_IMAGE_FILE_PATTERN,
+  imageExtensionForMime,
+  imageResponseSecurityHeaders,
+  normalizeImageMime,
+} from "../shared/image-assets.ts";
 const ARTICLE_API = "/api/local-articles";
 const ASSET_API = "/api/local-assets";
 const SECTIONS_API = "/api/sections";
@@ -40,16 +46,6 @@ type Article = {
 
 type ArticleIndexRecord = Omit<Article, "markdown"> & { objectKey: string };
 type Section = { id: string; label: string; icon: string; enabled: boolean; hotbarSlot?: number; description: string };
-
-const IMAGE_TYPES: Record<string, string> = {
-  "image/png": "png",
-  "image/jpeg": "jpg",
-  "image/gif": "gif",
-  "image/webp": "webp",
-  "image/avif": "avif",
-  "image/bmp": "bmp",
-  "image/x-icon": "ico",
-};
 
 function json(status: number, value: unknown, headers?: HeadersInit) {
   return Response.json(value, { status, headers: { "cache-control": "no-store", ...headers } });
@@ -229,12 +225,6 @@ async function handleArticles(request: Request, bucket: R2BucketLike, url: URL) 
   return json(405, { error: "不支持的请求方法" }, { allow: "GET, POST, PUT, DELETE" });
 }
 
-function imageMime(value: string | null) {
-  const mime = (value ?? "").split(";", 1)[0].trim().toLowerCase();
-  if (!IMAGE_TYPES[mime]) throw new Error("仅支持 PNG、JPEG、GIF、WebP、AVIF、BMP 和 ICO 图片");
-  return mime;
-}
-
 function privateHost(hostname: string) {
   const host = hostname.toLowerCase();
   return host === "localhost" || host.endsWith(".local") || /^(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host) || host === "::1";
@@ -254,7 +244,7 @@ async function fetchImage(sourceUrl: string) {
     if (!response.ok) throw new Error("无法下载图片外链");
     const declared = Number(response.headers.get("content-length") ?? 0);
     if (declared > MAX_IMAGE_BYTES) throw new Error("图片超过 10 MB 限制");
-    return { mime: imageMime(response.headers.get("content-type")), buffer: await response.arrayBuffer() };
+    return { mime: normalizeImageMime(response.headers.get("content-type")), buffer: await response.arrayBuffer() };
   }
   throw new Error("无法下载图片外链");
 }
@@ -268,7 +258,7 @@ async function imagePayload(value: unknown) {
     const binary = atob(match[2].replace(/\s/g, ""));
     if (!binary.length || binary.length > MAX_IMAGE_BYTES) throw new Error("图片为空或超过 10 MB 限制");
     const buffer = Uint8Array.from(binary, (character) => character.charCodeAt(0)).buffer;
-    return { mime: imageMime(match[1]), buffer };
+    return { mime: normalizeImageMime(match[1]), buffer };
   }
   if (typeof source.url === "string") return fetchImage(source.url);
   throw new Error("图片来源不正确");
@@ -280,7 +270,7 @@ async function handleAssets(request: Request, bucket: R2BucketLike, url: URL) {
     const sectionId = safeSectionId(payload.sectionId);
     const { mime, buffer } = await imagePayload(payload.image);
     if (buffer.byteLength > MAX_IMAGE_BYTES) throw new Error("图片超过 10 MB 限制");
-    const fileName = `${(await sha256(buffer)).slice(0, 24)}.${IMAGE_TYPES[mime]}`;
+    const fileName = `${(await sha256(buffer)).slice(0, 24)}.${imageExtensionForMime(mime)}`;
     const objectKey = `assets/${sectionId}/${fileName}`;
     await bucket.put(objectKey, buffer, { httpMetadata: { contentType: mime } });
     return json(200, { url: `${ASSET_API}/${encodeURIComponent(sectionId)}/${fileName}` });
@@ -290,9 +280,10 @@ async function handleAssets(request: Request, bucket: R2BucketLike, url: URL) {
     const parts = url.pathname.slice(ASSET_API.length + 1).split("/").map(decodeURIComponent);
     const sectionId = safeSectionId(parts[0]);
     const fileName = parts[1];
-    if (parts.length !== 2 || !/^[a-f0-9]{24}\.(png|jpg|gif|webp|avif|bmp|ico)$/.test(fileName ?? "")) return new Response("Not found", { status: 404 });
+    if (parts.length !== 2 || !STORED_IMAGE_FILE_PATTERN.test(fileName ?? "")) return new Response("Not found", { status: 404 });
     const object = await bucket.get(`assets/${sectionId}/${fileName}`);
     if (!object) return new Response("Not found", { status: 404 });
+    const securityHeaders = imageResponseSecurityHeaders(fileName);
     return new Response(object.body, {
       headers: {
         "content-type": object.httpMetadata?.contentType ?? "application/octet-stream",
@@ -300,6 +291,7 @@ async function handleAssets(request: Request, bucket: R2BucketLike, url: URL) {
         "cache-control": "public, max-age=31536000, immutable",
         "x-content-type-options": "nosniff",
         etag: object.etag,
+        ...securityHeaders,
       },
     });
   }

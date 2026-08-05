@@ -1,5 +1,6 @@
 export const EDITOR_AUTH_PATH = "/api/editor-auth";
 export const EDITOR_SESSION_COOKIE = "minelog_editor_session";
+const EDITOR_WRITE_PATHS = new Set(["/api/local-articles", "/api/local-assets", "/api/sections"]);
 const TOKEN_VERSION = "v2";
 export const EDITOR_SESSION_MAX_AGE_SECONDS = 5 * 24 * 60 * 60;
 const MAX_CLOCK_SKEW_SECONDS = 5 * 60;
@@ -10,6 +11,11 @@ const failedAttempts = new Map<string, { failures: number; resetAt: number }>();
 
 export function isEditorAccessKeyConfigured(accessKey: string | undefined): accessKey is string {
   return Boolean(accessKey && /^\d{6}$/.test(accessKey));
+}
+
+export function isProtectedEditorMutation(request: Request) {
+  const method = request.method.toUpperCase();
+  return method !== "GET" && method !== "HEAD" && EDITOR_WRITE_PATHS.has(new URL(request.url).pathname);
 }
 
 function base64Url(bytes: Uint8Array) {
