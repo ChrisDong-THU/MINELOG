@@ -1,0 +1,60 @@
+.editor-markdown-heading small.is-error { color: #e8a491; }
+
+.editor-table-modal { width: min(600px, calc(100vw - 32px)); }
+
+.editor-table-size {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 18px 20px 10px;
+}
+
+.editor-table-size label { display: grid; gap: 7px; }
+
+.editor-table-size label > span {
+  color: #9ea89b;
+  font: 8px ui-monospace, monospace;
+  letter-spacing: .12em;
+}
+
+.editor-table-size input {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid rgba(216, 224, 211, .2);
+  border-bottom-color: rgba(185, 237, 97, .42);
+  border-radius: 0;
+  outline: 0;
+  background: rgba(2, 6, 3, .68);
+  color: #edf1e9;
+  font: 11px var(--font);
+}
+
+.editor-table-size input:focus {
+  border-color: rgba(185, 237, 97, .66);
+  box-shadow: inset 0 -2px rgba(185, 237, 97, .2);
+}
+
+.editor-table-preview {
+  display: grid;
+  gap: 3px;
+  margin: 2px 20px 20px;
+  padding: 12px;
+  border: 1px solid rgba(216, 224, 211, .13);
+  background: rgba(2, 6, 3, .4);
+}
+
+.editor-table-preview > span { display: flex; gap: 3px; }
+
+.editor-table-preview i {
+  flex: 1;
+  min-width: 0;
+  height: 11px;
+  background: rgba(213, 221, 209, .08);
+}
+
+.editor-table-preview .is-header i { background: rgba(185, 237, 97, .25); }
+
+@media (max-width: 620px) {
+  .editor-table-size { grid-template-columns: 1fr; }
+}

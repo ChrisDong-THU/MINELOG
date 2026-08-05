@@ -1,9 +1,13 @@
-/** Cloudflare Worker entry point for the vinext-starter template. */
+﻿/** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+import { EDITOR_AUTH_PATH, editorMutationAllowed, handleEditorAuthRequest, isEditorAccessKeyConfigured } from "../shared/editor-auth";
+import { handleR2ContentRequest, type R2BucketLike } from "./r2-content";
 
 interface Env {
   ASSETS: Fetcher;
+  EDITOR_ACCESS_KEY?: string;
+  CONTENT_BUCKET: R2BucketLike;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -18,15 +22,23 @@ interface ExecutionContext {
   passThroughOnException(): void;
 }
 
-// Image security config. SVG sources with .svg extension auto-skip the
-// optimization endpoint on the client side (served directly, no proxy).
-// To route SVGs through the optimizer (with security headers), set
-// dangerouslyAllowSVG: true in next.config.ts and uncomment below:
-// const imageConfig: ImageConfig = { dangerouslyAllowSVG: true };
-
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname === EDITOR_AUTH_PATH) return handleEditorAuthRequest(request, env.EDITOR_ACCESS_KEY);
+
+    const protectsEditorWrite = request.method !== "GET" && request.method !== "HEAD"
+      && (url.pathname === "/api/local-articles" || url.pathname === "/api/local-assets" || url.pathname === "/api/sections");
+    if (protectsEditorWrite && !await editorMutationAllowed(request, env.EDITOR_ACCESS_KEY)) {
+      return Response.json({ error: "请先通过编辑密钥验证" }, {
+        status: isEditorAccessKeyConfigured(env.EDITOR_ACCESS_KEY) ? 401 : 503,
+        headers: { "cache-control": "no-store" },
+      });
+    }
+
+    const storageResponse = await handleR2ContentRequest(request, env.CONTENT_BUCKET);
+    if (storageResponse) return storageResponse;
 
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];

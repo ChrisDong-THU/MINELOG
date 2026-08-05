@@ -137,7 +137,21 @@
   scroll-margin-top: 24px;
 }
 .markdown-body h1 { margin: 20px 0 8px; font-size: 27px; }
-.markdown-body h2 { margin: 20px 0 5px; padding-bottom: 5px; border-bottom: 1px solid #d8d3c8; font-size: 22px; }
+.markdown-body h2 {
+  margin: 26px 0 9px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #d8d4ca;
+  font-size: 22px;
+}
+.markdown-body h2::after {
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 44px;
+  height: 2px;
+  background: #82985d;
+  content: "";
+}
 .markdown-body h3 { margin: 20px 0 5px; padding-bottom: 5px; border-bottom: 1px solid #ddd8cd; font-size: 19px; }
 .markdown-body h4 { margin: 18px 0 5px; font-size: 16px; font-weight: 700; }
 .heading-anchor { margin-left: .45em; color: #819064 !important; font-size: .72em; opacity: 0; }
@@ -342,11 +356,11 @@
 
 .reader-page .reader-toc { position: relative; top: auto; padding: 19px 16px 17px; }
 .reader-page .reader-toc > span { display: block; color: #b9ed61; font: 7px ui-monospace, monospace; letter-spacing: .2em; }
-.reader-page .reader-toc nav { display: grid; gap: 0; margin-top: 11px; counter-reset: toc; }
+.reader-page .reader-toc nav { display: grid; gap: 0; margin-top: 11px; }
 .reader-page .reader-toc a {
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
-  gap: 6px;
+  grid-template-columns: 12px minmax(0, 1fr);
+  column-gap: 8px;
   align-items: start;
   padding: 8px 0;
   border-top: 1px solid rgba(215, 223, 210, .09);
@@ -355,7 +369,7 @@
   text-shadow: none;
   transition: color .14s ease, padding-left .14s ease;
 }
-.reader-page .reader-toc a::before { counter-increment: toc; content: "0" counter(toc); color: #6f796d; font: 7px/1.9 ui-monospace, monospace; }
+.reader-page .reader-toc .toc-number { color: #6f796d; font: 7px/1.9 ui-monospace, monospace; white-space: nowrap; }
 .reader-page .reader-toc a:hover { padding-left: 3px; color: #b9ed61; }
 .reader-page .reader-toc a.toc-sub { padding-left: 10px; color: #aeb7ac; font-size: 10px; }
 .reader-page .reader-toc a.toc-sub:hover { padding-left: 13px; color: #b9ed61; }

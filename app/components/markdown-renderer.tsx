@@ -6,6 +6,7 @@ import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { rehypeKatexSizingCompat } from "../katex-compat";
+import { ResizableMarkdownImage } from "./resizable-markdown-image";
 
 type MarkdownComponents = ComponentProps<typeof ReactMarkdown>["components"];
 const REMARK_PLUGINS: NonNullable<ComponentProps<typeof ReactMarkdown>["remarkPlugins"]> = [remarkGfm, remarkMath];
@@ -15,18 +16,39 @@ export function MarkdownRenderer({
   markdown,
   components,
   className = "",
+  editableImages = false,
+  onImageWidthChange,
 }: {
   markdown: string;
   components?: MarkdownComponents;
   className?: string;
+  editableImages?: boolean;
+  onImageWidthChange?: (src: string, width: number) => void;
 }) {
   const rootRef = useRef<HTMLElement>(null);
   const markdownComponents = useMemo<MarkdownComponents>(() => ({
     a: ({ href, children, ...props }) => <a href={href} target={href?.startsWith("http") ? "_blank" : undefined} rel={href?.startsWith("http") ? "noreferrer" : undefined} {...props}>{children}</a>,
-    img: ({ alt, ...props }) => <img loading="lazy" alt={alt ?? ""} {...props} />,
+    img: ({ alt, src, ...props }) => {
+      const video = alt?.match(/^video(?::\s*(.*))?$/i);
+      if (video) {
+        const label = video[1]?.trim() || "正文视频";
+        return <figure className="markdown-video">
+          <video controls preload="metadata" src={src} aria-label={label}>当前浏览器无法播放此视频。</video>
+          {video[1] && <figcaption>{label}</figcaption>}
+        </figure>;
+      }
+      if (!src) return null;
+      return <ResizableMarkdownImage
+        src={src}
+        alt={alt ?? ""}
+        editable={editableImages}
+        onWidthChange={onImageWidthChange}
+        {...props}
+      />;
+    },
     table: ({ children }) => <div className="table-scroll"><table>{children}</table></div>,
     ...components,
-  }), [components]);
+  }), [components, editableImages, onImageWidthChange]);
 
   useEffect(() => {
     const root = rootRef.current;

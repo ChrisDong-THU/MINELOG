@@ -1,12 +1,12 @@
 "use client";
 
 import { Children, isValidElement, useEffect, useMemo, type MouseEvent, type ReactNode } from "react";
-import type { Section } from "../content-types";
-import type { SectionArticle } from "../section-articles";
+import type { Section, SectionArticle } from "../content-types";
+import { MINECRAFT_UI_ICONS } from "../minecraft-icons";
 import { MarkdownRenderer } from "./markdown-renderer";
 
 type ReaderSection = Pick<Section, "label" | "icon">;
-type TocItem = { level: number; title: string; id: string };
+type TocItem = { level: number; title: string; id: string; number: string };
 
 function slugify(value: string) {
   return value.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "");
@@ -29,9 +29,36 @@ function scrollToReaderHeading(id: string, behavior: ScrollBehavior = "smooth") 
   const top = viewport.scrollTop + target.getBoundingClientRect().top - viewport.getBoundingClientRect().top - 24;
   viewport.scrollTo({ top: Math.max(0, top), behavior });
 }
-export function ArticleReader({ section, article, markdown, onBack }: { section: ReaderSection; article: SectionArticle; markdown: string; onBack: () => void }) {
-  const toc = useMemo<TocItem[]>(() => Array.from(markdown.matchAll(/^(#{2,3})\s+(.+)$/gm), (match) => ({ level: match[1].length, title: match[2].replace(/[*_`]/g, ""), id: slugify(match[2].replace(/[*_`]/g, "")) })), [markdown]);
 
+function buildTableOfContents(markdown: string): TocItem[] {
+  const items: TocItem[] = [];
+  let sectionNumber = 0;
+  let subsectionNumber = 0;
+
+  for (const match of markdown.matchAll(/^(#{2,3})\s+(.+)$/gm)) {
+    const level = match[1].length;
+    const title = match[2].replace(/[*_`]/g, "");
+
+    if (level === 2) {
+      sectionNumber += 1;
+      subsectionNumber = 0;
+    } else {
+      subsectionNumber += 1;
+    }
+
+    items.push({
+      level,
+      title,
+      id: slugify(title),
+      number: String(level === 2 ? sectionNumber : subsectionNumber),
+    });
+  }
+
+  return items;
+}
+
+export function ArticleReader({ section, article, markdown, onBack }: { section: ReaderSection; article: SectionArticle; markdown: string; onBack: () => void }) {
+  const toc = useMemo(() => buildTableOfContents(markdown), [markdown]);
 
   useEffect(() => {
     const syncHash = () => window.requestAnimationFrame(() => {
@@ -71,7 +98,7 @@ export function ArticleReader({ section, article, markdown, onBack }: { section:
 
   return <div className="reader-page">
     <header className="reader-header">
-      <button className="reader-back" onClick={onBack}><img src="/minecraft/items/arrow.png" alt="" /><span>返回 {section.label}</span></button>
+      <button className="reader-back" onClick={onBack}><img src={MINECRAFT_UI_ICONS.back} alt="" /><span>返回 {section.label}</span></button>
       <div className="reader-category"><img src={section.icon} alt="" /><span>{section.label}</span></div>
       <h1>{article.title}</h1>
       <p>{article.summary}</p>
@@ -102,7 +129,7 @@ export function ArticleReader({ section, article, markdown, onBack }: { section:
 
         {toc.length > 0 && <section className="reader-toc">
           <span>CONTENTS</span>
-          <nav>{toc.map((item) => <a className={item.level === 3 ? "toc-sub" : ""} onClick={(event) => navigateToHeading(event, item.id)} href={`#${item.id}`} key={item.id}>{item.title}</a>)}</nav>
+          <nav>{toc.map((item) => <a className={item.level === 3 ? "toc-sub" : ""} onClick={(event) => navigateToHeading(event, item.id)} href={`#${item.id}`} key={item.id}><span className="toc-number">{item.number}</span><span>{item.title}</span></a>)}</nav>
         </section>}
       </aside>
     </div>

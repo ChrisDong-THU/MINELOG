@@ -31,7 +31,7 @@ export function GameModal({ eyebrow, title, description, icon, onClose, children
 
   return <div className="modal-backdrop" onMouseDown={onClose}>
     <section className={["game-modal", className].filter(Boolean).join(" ")} role="dialog" aria-modal="true" aria-labelledby={titleId} onMouseDown={(event) => event.stopPropagation()}>
-      <header className="game-modal__header">
+      <header className={`game-modal__header${icon ? "" : " game-modal__header--no-icon"}`}>
         {icon && <span className="game-modal__icon"><img src={icon} alt="" draggable={false} /></span>}
         <div className="game-modal__heading">
           {eyebrow && <p>{eyebrow}</p>}

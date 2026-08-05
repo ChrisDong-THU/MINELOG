@@ -2,35 +2,10 @@
 
 import { useState } from "react";
 import type { Section } from "../content-types";
+import { availableSectionIcons, MINECRAFT_UI_ICONS } from "../minecraft-icons";
 import { GameModal } from "./game-modal";
 
 export type EditableSection = Section;
-
-const ICONS = [
-  "/minecraft/items/redstone.png",
-  "/minecraft/items/spyglass.png",
-  "/minecraft/items/writable_book.png",
-  "/minecraft/items/ender_eye.png",
-  "/minecraft/items/chest_minecart.png",
-  "/minecraft/items/nether_star.png",
-  "/minecraft/items/bundle.png",
-  "/minecraft/items/book.png",
-  "/minecraft/items/amethyst_shard.png",
-  "/minecraft/items/diamond.png",
-  "/minecraft/items/emerald.png",
-  "/minecraft/items/echo_shard.png",
-  "/minecraft/items/experience_bottle.png",
-  "/minecraft/items/ender_pearl.png",
-  "/minecraft/items/heart_of_the_sea.png",
-  "/minecraft/items/honeycomb.png",
-  "/minecraft/items/lapis_lazuli.png",
-  "/minecraft/items/nautilus_shell.png",
-  "/minecraft/items/name_tag.png",
-  "/minecraft/items/feather.png",
-  "/minecraft/items/totem_of_undying.png",
-  "/minecraft/items/iron_pickaxe.png",
-];
-const RANDOM_ICON = "/minecraft/items/firework_star.png";
 
 export function SectionEditorModal({
   mode,
@@ -46,13 +21,16 @@ export function SectionEditorModal({
   onDelete: (id: string) => void;
 }) {
   const first = sections[0];
+  const initialIcons = availableSectionIcons(sections, mode === "edit" ? first?.id : undefined);
+  const initialIcon = mode === "edit" && first && initialIcons.includes(first.icon) ? first.icon : initialIcons[0] ?? "";
   const [sectionId, setSectionId] = useState(first?.id ?? "");
   const [label, setLabel] = useState(mode === "edit" ? first?.label ?? "" : "");
   const [description, setDescription] = useState(mode === "edit" ? first?.description ?? "" : "");
-  const [icon, setIcon] = useState(mode === "edit" ? first?.icon ?? ICONS[0] : ICONS[2]);
+  const [icon, setIcon] = useState(initialIcon);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const selected = sections.find((section) => section.id === sectionId);
-  const valid = label.trim().length > 0 && description.trim().length > 0;
+  const iconOptions = availableSectionIcons(sections, mode === "edit" ? sectionId : undefined);
+  const valid = label.trim().length > 0 && description.trim().length > 0 && Boolean(icon);
 
   const chooseSection = (id: string) => {
     const next = sections.find((section) => section.id === id);
@@ -60,12 +38,13 @@ export function SectionEditorModal({
     setSectionId(next.id);
     setLabel(next.label);
     setDescription(next.description);
-    setIcon(next.icon);
+    const nextIcons = availableSectionIcons(sections, next.id);
+    setIcon(nextIcons.includes(next.icon) ? next.icon : nextIcons[0] ?? "");
   };
 
   const randomizeIcon = () => {
-    const choices = ICONS.filter((item) => item !== icon);
-    setIcon(choices[Math.floor(Math.random() * choices.length)] ?? ICONS[0]);
+    const choices = iconOptions.filter((item) => item !== icon);
+    setIcon(choices[Math.floor(Math.random() * choices.length)] ?? iconOptions[0] ?? "");
   };
 
   if (deleteConfirm && selected) {
@@ -110,7 +89,7 @@ export function SectionEditorModal({
 
       <fieldset className="section-icon-picker">
         <legend>板块图标</legend>
-        <div><button className="section-random-icon" type="button" aria-label="随机选择板块图标" title="RANDOM · 随机选择" onClick={randomizeIcon}><img src={RANDOM_ICON} alt="" /><small>RND</small></button>{ICONS.map((item) => <button type="button" key={item} aria-label="选择板块图标" aria-pressed={icon === item} onClick={() => setIcon(item)}><img src={item} alt="" /></button>)}</div>
+        <div><button className="section-random-icon" type="button" aria-label="随机选择板块图标" title="RANDOM · 随机选择" disabled={iconOptions.length === 0} onClick={randomizeIcon}><img src={MINECRAFT_UI_ICONS.random} alt="" /><small>RND</small></button>{iconOptions.map((item) => <button type="button" key={item} aria-label="选择板块图标" aria-pressed={icon === item} onClick={() => setIcon(item)}><img src={item} alt="" /></button>)}</div>
       </fieldset>
 
       <label className="section-editor-field">

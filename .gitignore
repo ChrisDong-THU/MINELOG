@@ -32,11 +32,13 @@ yarn-error.log*
 pnpm-debug.log*
 *.tmp
 *.temp
+*.orig
 /.cache/
 
 # Local work products
 /outputs/
 /work/
+/content/local/
 /docs/screenshots/
 /screenshots/
 

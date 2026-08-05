@@ -1,7 +1,10 @@
 import vinext from "vinext";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import hostingConfig from "./.openai/hosting.json";
 import { sites } from "./build/sites-vite-plugin";
+import { localArticleFiles } from "./build/local-article-files-plugin";
+import { localArticleAssets } from "./build/local-article-assets-plugin";
+import { editorAuth } from "./build/editor-auth-plugin";
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   "00000000-0000-4000-8000-000000000000";
@@ -33,7 +36,8 @@ const localBindingConfig = {
     : [],
 };
 
-export default defineConfig(async () => {
+export default defineConfig(async ({ mode }) => {
+  const runtimeEnv = loadEnv(mode, process.cwd(), "");
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
   // settings; application environment belongs in ignored `.env*` files.
   process.env.WRANGLER_WRITE_LOGS ??= "false";
@@ -58,6 +62,9 @@ export default defineConfig(async () => {
       ? { watch: { useFsEvents: false, usePolling: true } }
       : undefined,
     plugins: [
+      editorAuth(runtimeEnv.EDITOR_ACCESS_KEY),
+      localArticleAssets(),
+      localArticleFiles(),
       vinext(),
       sites(),
       cloudflare({

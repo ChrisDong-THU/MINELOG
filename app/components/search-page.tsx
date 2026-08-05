@@ -1,15 +1,8 @@
 "use client";
 
 import { useMemo, useRef } from "react";
-import type { SectionArticle } from "../section-articles";
-
-export type SearchDocument = {
-  sectionId: string;
-  sectionLabel: string;
-  sectionIcon: string;
-  article: SectionArticle;
-  markdown: string;
-};
+import type { SearchDocument } from "../content-types";
+import { MINECRAFT_UI_ICONS } from "../minecraft-icons";
 
 function normalize(value: string) {
   return value.normalize("NFKC").toLocaleLowerCase("zh-CN").trim();
@@ -25,15 +18,46 @@ function plainText(markdown: string) {
     .trim();
 }
 
-function excerpt(document: SearchDocument, term: string) {
+type IndexedSearchDocument = {
+  document: SearchDocument;
+  title: string;
+  summary: string;
+  section: string;
+  tags: string;
+  body: string;
+  normalizedBody: string;
+  searchable: string;
+};
+
+function indexDocument(document: SearchDocument): IndexedSearchDocument {
+  const title = normalize(document.article.title);
+  const summary = normalize(document.article.summary);
+  const section = normalize(document.sectionLabel);
+  const tags = normalize(document.article.tags.join(" "));
+  const body = plainText(document.markdown);
+  const normalizedBody = normalize(body);
+
+  return {
+    document,
+    title,
+    summary,
+    section,
+    tags,
+    body,
+    normalizedBody,
+    searchable: [title, summary, section, tags, normalizedBody].join(" "),
+  };
+}
+
+function excerpt(indexed: IndexedSearchDocument, term: string) {
+  const { document, body, normalizedBody } = indexed;
   const summary = document.article.summary;
   if (!term || normalize(summary).includes(term)) return summary;
-  const body = plainText(document.markdown);
-  const index = normalize(body).indexOf(term);
+  const index = normalizedBody.indexOf(term);
   if (index < 0) return summary;
   const start = Math.max(0, index - 36);
   const end = Math.min(body.length, index + term.length + 72);
-  return `${start > 0 ? "…" : ""}${body.slice(start, end)}${end < body.length ? "…" : ""}`;
+  return (start > 0 ? "\u2026" : "") + body.slice(start, end) + (end < body.length ? "\u2026" : "");
 }
 
 function highlight(text: string, query: string) {
@@ -57,17 +81,13 @@ export function SearchPage({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const normalizedQuery = normalize(query);
+  const indexedDocuments = useMemo(() => documents.map(indexDocument), [documents]);
   const terms = useMemo(() => normalizedQuery.split(/\s+/).filter(Boolean), [normalizedQuery]);
   const results = useMemo(() => {
     if (!terms.length) return [];
-    return documents
-      .map((document) => {
-        const title = normalize(document.article.title);
-        const summary = normalize(document.article.summary);
-        const section = normalize(document.sectionLabel);
-        const tags = normalize(document.article.tags.join(" "));
-        const body = normalize(plainText(document.markdown));
-        const searchable = `${title} ${summary} ${section} ${tags} ${body}`;
+    return indexedDocuments
+      .map((indexed) => {
+        const { title, summary, section, tags, normalizedBody: body, searchable } = indexed;
         if (!terms.every((term) => searchable.includes(term))) return null;
         const score = terms.reduce((total, term) => total
           + (title === term ? 120 : title.startsWith(term) ? 70 : title.includes(term) ? 48 : 0)
@@ -75,11 +95,12 @@ export function SearchPage({
           + (section.includes(term) ? 16 : 0)
           + (summary.includes(term) ? 12 : 0)
           + (body.includes(term) ? 3 : 0), 0);
-        return { document, score };
+        return { indexed, score };
       })
-      .filter((result): result is { document: SearchDocument; score: number } => result !== null)
-      .sort((a, b) => b.score - a.score || b.document.article.date.localeCompare(a.document.article.date));
-  }, [documents, terms]);
+      .filter((result): result is { indexed: IndexedSearchDocument; score: number } => result !== null)
+      .sort((a, b) => b.score - a.score
+        || b.indexed.document.article.date.localeCompare(a.indexed.document.article.date));
+  }, [indexedDocuments, terms]);
 
   const suggestions = useMemo(() => {
     const tagCounts = new Map<string, { label: string; count: number }>();
@@ -107,7 +128,7 @@ export function SearchPage({
 
     <div className="search-console">
       <label className="search-input-shell">
-        <img src="/minecraft/items/spyglass.png" alt="" />
+        <img src={MINECRAFT_UI_ICONS.search} alt="" />
         <input
           ref={inputRef}
           autoFocus
@@ -137,18 +158,18 @@ export function SearchPage({
 
     {query && <section className="search-results" aria-live="polite">
       <div className="search-results-heading"><div><span>SEARCH RESULTS</span><h2>{results.length ? `找到 ${results.length} 篇文章` : "没有找到匹配内容"}</h2></div><small>按相关度排序</small></div>
-      {results.length > 0 ? <div className="search-result-list">{results.map(({ document }) =>
-        <button type="button" className="search-result-card" key={`${document.sectionId}:${document.article.title}`} onClick={() => onOpen(document.sectionId, document.article.title)}>
-          <span className="search-result-icon"><img src={document.sectionIcon} alt="" /></span>
+      {results.length > 0 ? <div className="search-result-list">{results.map(({ indexed }) =>
+        <button type="button" className="search-result-card" key={`${indexed.document.sectionId}:${indexed.document.article.title}`} onClick={() => onOpen(indexed.document.sectionId, indexed.document.article.title)}>
+          <span className="search-result-icon"><img src={indexed.document.sectionIcon} alt="" /></span>
           <span className="search-result-copy">
-            <small>{document.sectionLabel} · {document.article.date} · {document.article.read}</small>
-            <strong>{highlight(document.article.title, query)}</strong>
-            <span>{highlight(excerpt(document, terms[0] ?? ""), query)}</span>
-            <i>{document.article.tags.map((tag) => <b key={tag}>{tag}</b>)}</i>
+            <small>{indexed.document.sectionLabel} · {indexed.document.article.date} · {indexed.document.article.read}</small>
+            <strong>{highlight(indexed.document.article.title, query)}</strong>
+            <span>{highlight(excerpt(indexed, terms[0] ?? ""), query)}</span>
+            <i>{indexed.document.article.tags.map((tag) => <b key={tag}>{tag}</b>)}</i>
           </span>
-          <img className="search-result-arrow" src="/minecraft/items/arrow.png" alt="" />
+          <img className="search-result-arrow" src={MINECRAFT_UI_ICONS.back} alt="" />
         </button>)}</div> : <div className="search-empty">
-        <img src="/minecraft/items/spyglass.png" alt="" />
+        <img src={MINECRAFT_UI_ICONS.search} alt="" />
         <strong>这条矿脉暂时没有记录</strong>
         <span>尝试减少关键词，或改用板块名称与文章标签。</span>
         <button type="button" onClick={() => { onQueryChange(""); inputRef.current?.focus(); }}>重新搜索</button>

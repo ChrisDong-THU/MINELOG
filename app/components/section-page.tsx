@@ -2,8 +2,23 @@
 
 import { useMemo, useState } from "react";
 import type { Section } from "../content-types";
-import type { SectionArticle } from "../section-articles";
+import { MINECRAFT_UI_ICONS } from "../minecraft-icons";
+import type { SectionArticle } from "../content-types";
 
+type SectionUiIconName = "recent" | "alphabetical";
+
+function SectionUiIcon({ name }: { name: SectionUiIconName }) {
+  const common = {
+    fill: "none",
+    stroke: "currentColor",
+    strokeLinecap: "square" as const,
+    strokeLinejoin: "miter" as const,
+    strokeWidth: 1.8,
+  };
+
+  if (name === "recent") return <svg viewBox="0 0 24 24" aria-hidden="true"><circle {...common} cx="12" cy="12" r="8.5" /><path {...common} d="M12 7v5l3.5 2M4.5 5.5H8v3.5" /></svg>;
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path {...common} d="M6 4v16m0 0-3-3m3 3 3-3M12 6h9M12 12h7M12 18h5" /></svg>;
+}
 export function SectionPage({
   section,
   articles,
@@ -29,22 +44,29 @@ export function SectionPage({
     <div className="section-body">
       <div className="article-index-heading">
         <div className="article-index-title">
-          <div><p>ARTICLE INDEX</p><h2>板块文章</h2></div>
-          <span className="article-total"><strong>{String(articles.length).padStart(2, "0")}</strong> 篇文章</span>
+          <div className="article-index-copy">
+            <h2>文章目录</h2>
+            <span className="article-total"><strong>{articles.length}</strong><span>篇文章</span></span>
+          </div>
         </div>
         <div className="article-sort" role="group" aria-label="文章排序方式">
-          <button aria-pressed={sortMode === "newest"} onClick={() => setSortMode("newest")}>更新时间</button>
-          <button aria-pressed={sortMode === "alphabetical"} onClick={() => setSortMode("alphabetical")}>首字母</button>
+          <button type="button" aria-label="按更新时间排序" title="按更新时间排序" aria-pressed={sortMode === "newest"} onClick={() => setSortMode("newest")}><SectionUiIcon name="recent" /></button>
+          <button type="button" aria-label="按标题排序" title="按标题排序" aria-pressed={sortMode === "alphabetical"} onClick={() => setSortMode("alphabetical")}><SectionUiIcon name="alphabetical" /></button>
         </div>
       </div>
-      <div className="article-grid">{sortedArticles.map((article) =>
-        <button className="article-card" key={article.title} onClick={() => onOpen(article.title)}>
-          <span className="article-meta"><b>{article.date}</b><i>{article.read}</i></span>
+      <div className="article-grid">{sortedArticles.map((article, index) =>
+        <button className={`article-card${index === 0 ? " article-card--featured" : ""}`} key={article.title} onClick={() => onOpen(article.title)}>
           <h3>{article.title}</h3>
           <p>{article.summary}</p>
           <span className="article-footer">
-            <span>{article.tags.map((tag) => <b key={tag}>{tag}</b>)}</span>
-            <img src="/minecraft/items/arrow.png" alt="" />
+            <span className="article-tags">{article.tags.map((tag) => <b key={tag}>{tag}</b>)}</span>
+            <span className="article-card-details">
+              <span className="article-meta"><b>{article.date}</b><i>{article.read}</i></span>
+              <span className="article-open-icon" aria-hidden="true">
+                <img className="article-book-icon article-book-icon--closed" src={MINECRAFT_UI_ICONS.articleClosed} alt="" draggable={false} />
+                <img className="article-book-icon article-book-icon--open" src={MINECRAFT_UI_ICONS.articleOpen} alt="" draggable={false} />
+              </span>
+            </span>
           </span>
         </button>)}</div>
     </div>

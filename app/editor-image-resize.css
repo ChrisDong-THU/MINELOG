@@ -1,0 +1,51 @@
+.markdown-image-frame {
+  position: relative;
+  display: block;
+  max-width: 100%;
+  margin: 1.25em auto;
+}
+
+.markdown-image-frame > img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  margin: 0;
+}
+
+.markdown-image-resize-handle {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  width: 24px;
+  height: 66px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  cursor: ew-resize;
+  touch-action: none;
+  transform: translateY(-50%);
+}
+
+.markdown-image-resize-handle::before {
+  position: absolute;
+  top: 15px;
+  bottom: 15px;
+  left: 10px;
+  width: 4px;
+  border-radius: 2px;
+  background: rgba(44, 47, 43, .72);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .55), 0 2px 5px rgba(0, 0, 0, .24);
+  content: "";
+}
+
+.markdown-image-resize-handle.is-left { left: -26px; }
+.markdown-image-resize-handle.is-right { right: -26px; }
+.markdown-image-resize-handle:hover::before,
+.markdown-image-resize-handle:focus-visible::before { background: #7d963f; }
+
+@media (max-width: 620px) {
+  .markdown-image-resize-handle.is-left { left: -18px; }
+  .markdown-image-resize-handle.is-right { right: -18px; }
+}

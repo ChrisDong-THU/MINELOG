@@ -26,28 +26,70 @@ test("server renders the MINELOG application shell", async () => {
 
   const html = await response.text();
   assert.match(html, /<html[^>]+lang="zh-CN"/i);
-  assert.match(html, /<title>矿脉日志 MINELOG<\/title>/i);
+  assert.match(html, /<title>[^<]*MINELOG<\/title>/i);
   assert.match(html, /MINELOG/);
   assert.doesNotMatch(html, /Your site is taking shape|react-loading-skeleton/i);
 });
 
-test("keeps navigation, storage and content rendering in focused modules", async () => {
-  const [page, navigation, storage, renderer, searchPage, layout, markdown] = await Promise.all([
+test("keeps navigation, rendering and local content storage in focused modules", async () => {
+  const [page, navigation, storage, renderer, resizableImage, searchPage, layout, fileClient, filePlugin, assetClient, assetPlugin, editor, toolbar, articleReader, contentModel, hotbarModel, gitignore, minecraftIcons, sectionEditor] = await Promise.all([
     source("app/page.tsx"),
     source("app/navigation.ts"),
     source("app/browser-storage.ts"),
     source("app/components/markdown-renderer.tsx"),
+    source("app/components/resizable-markdown-image.tsx"),
     source("app/components/search-page.tsx"),
     source("app/layout.tsx"),
-    source("content/ai/rag-latency.md"),
+    source("app/local-article-files.ts"),
+    source("build/local-article-files-plugin.ts"),
+    source("app/local-article-assets.ts"),
+    source("build/local-article-assets-plugin.ts"),
+    source("app/components/article-editor.tsx"),
+    source("app/components/markdown-editor-toolbar.tsx"),
+    source("app/components/article-reader.tsx"),
+    source("app/content-model.ts"),
+    source("app/hotbar-model.ts"),
+    source(".gitignore"),
+    source("app/minecraft-icons.ts"),
+    source("app/components/section-editor-modal.tsx"),
   ]);
+  const editorBase = await source("app/editor-base.css");
+  const sectionPage = await source("app/components/section-page.tsx");
+  const feedCarousel = await source("app/components/feed-carousel.tsx");
 
   assert.match(page, /from "\.\/navigation"/);
   assert.match(page, /from "\.\/browser-storage"/);
+  assert.match(page, /from "\.\/local-article-files"/);
   assert.match(page, /from "\.\/components\/feed-carousel"/);
+  assert.match(contentModel, /slice\(0, limit\)/);
+  assert.doesNotMatch(page, /updateLogOpen|panel-link|update-history/);
+  assert.match(feedCarousel, /MAX_FEED_ENTRIES = 10/);
+  assert.match(feedCarousel, /entries\.slice\(0, MAX_FEED_ENTRIES\)/);
+  assert.match(feedCarousel, /onPointerEnter/);
+  assert.match(feedCarousel, /onFocusCapture/);
+  assert.match(feedCarousel, /onWheel=\{handleWheel\}/);
   assert.match(page, /from "\.\/components\/section-page"/);
   assert.match(page, /from "\.\/components\/search-page"/);
-  assert.doesNotMatch(page, /localStorage\.getItem|localStorage\.setItem/);
+  assert.doesNotMatch(page, /rag-latency\.md/);
+  assert.match(page, /from "\.\/hotbar-model"/);
+  assert.match(hotbarModel, /resolveHotbarSections/);
+  assert.match(page, /application\/x-minelog-section/);
+  assert.match(page, /onDrop=/);
+  assert.match(page, /assignSectionToHotbarSlot/);
+  assert.match(hotbarModel, /slotBySectionId/);
+  assert.match(page, /setDragImage/);
+  assert.match(page, /document\.elementFromPoint/);
+  assert.match(page, /closest\("\.game-hud"\)/);
+  assert.doesNotMatch(page, /dropSectionInMore|is-hotbar-drop-target/);
+  assert.match(page, /enabled: false, hotbarSlot: undefined/);
+  assert.match(page, /section-edit-trigger[^\n]+MINECRAFT_UI_ICONS\.manageSections/);
+  assert.match(page, /reader-edit-trigger[^\n]+MINECRAFT_UI_ICONS\.editArticle/);
+  assert.doesNotMatch(page, /settings-trigger|HOTBAR LOADOUT/);
+  assert.match(page, /onWheel=\{switchHotbarPage\}/);
+  assert.match(page, /className="slot-tooltip">\{label\}/);
+  assert.doesNotMatch(page, /\{i \+ 1\} · \{label\}/);
+  assert.doesNotMatch(page, /所有板块都已放入工具槽/);
+  assert.doesNotMatch(page, /<em>拖入工具槽<\/em>/);
 
   assert.match(navigation, /pushState/);
   assert.match(navigation, /replaceState/);
@@ -59,10 +101,75 @@ test("keeps navigation, storage and content rendering in focused modules", async
   assert.match(renderer, /remarkGfm/);
   assert.match(renderer, /remarkMath/);
   assert.match(renderer, /rehypeKatex/);
-  assert.match(searchPage, /Markdown 正文/);
-  assert.match(searchPage, /按相关度排序/);
   assert.match(searchPage, /slice\(0, 7\)/);
   assert.match(searchPage, /b\.count - a\.count/);
-  assert.match(layout, /title:\s*"矿脉日志 MINELOG"/);
-  assert.match(markdown, /^#/m);
+  assert.match(sectionPage, /SectionUiIcon/);
+  assert.match(sectionPage, /<strong>\{articles\.length\}<\/strong>/);
+  assert.doesNotMatch(sectionPage, /minecraft\/items\/(?:comparator|name_tag)\.png/);
+  assert.match(sectionPage, /MINECRAFT_UI_ICONS\.articleClosed/);
+  assert.match(sectionPage, /MINECRAFT_UI_ICONS\.articleOpen/);
+  assert.doesNotMatch(sectionPage, /ARTICLE INDEX/);
+  assert.doesNotMatch(sectionPage, /article-index-icon/);
+  assert.doesNotMatch(sectionPage, /minecraft\/items\/arrow\.png/);
+  assert.match(sectionPage, /article-open-icon/);
+  assert.match(sectionPage, /index === 0 \? " article-card--featured"/);
+  assert.match(layout, /MINELOG/);
+  const uiIconBlock = minecraftIcons.slice(
+    minecraftIcons.indexOf("export const MINECRAFT_UI_ICONS"),
+    minecraftIcons.indexOf("} as const;") + "} as const;".length,
+  );
+  const uiIconAssets = uiIconBlock.split(String.fromCharCode(10)).flatMap((line) => {
+    const itemMatch = line.match(/item[(]"([^"]+)"[)]/);
+    const pathMatch = line.match(/"([/]minecraft[/][^"]+[.]png)"/);
+    return itemMatch ? [itemMatch[1]] : pathMatch ? [pathMatch[1]] : [];
+  });
+  assert.ok(uiIconAssets.length > 0);
+  assert.equal(new Set(uiIconAssets).size, uiIconAssets.length);
+  assert.ok(minecraftIcons.includes("SECTION_ICON_OPTIONS"));
+  assert.ok(minecraftIcons.includes("!RESERVED_UI_ICON_SET.has(icon)"));
+  assert.ok(minecraftIcons.includes("availableSectionIcons"));
+  assert.ok(minecraftIcons.includes("normalizeSectionIcons"));
+  assert.ok(sectionEditor.includes("iconOptions.map"));
+  assert.ok(sectionEditor.includes("availableSectionIcons(sections"));
+  assert.ok(!sectionEditor.includes("const ICONS"));
+  assert.ok(!sectionEditor.includes("RANDOM_ICON"));
+
+  assert.match(fileClient, /\/api\/local-articles/);
+  assert.match(filePlugin, /writeFile/);
+  assert.match(filePlugin, /"content", "local"/);
+  assert.match(filePlugin, /pruneUnusedAssets/);
+  assert.match(assetClient, /\/api\/local-assets/);
+  assert.match(assetClient, /FileReader/);
+  assert.match(assetPlugin, /writeFile/);
+  assert.match(assetPlugin, /"content", "local"/);
+  assert.match(assetPlugin, /assets/);
+  assert.match(assetPlugin, /"image\/svg\+xml": "svg"/);
+  assert.match(renderer, /ResizableMarkdownImage/);
+  assert.match(renderer, /editableImages/);
+  assert.match(resizableImage, /markdown-image-resize-handle/);
+  assert.match(resizableImage, /#width=/);
+  assert.match(editor, /handleEditorPaste/);
+  assert.match(editor, /saveLocalArticleImage/);
+  assert.match(editor, /updateImageWidth/);
+  assert.match(editor, /onImageWidthChange/);
+  assert.match(editor, /editor-form-column/);
+  assert.match(editor, /editor-markdown-panel/);
+  assert.match(editorBase, /position: sticky/);
+  assert.match(editorBase, /max-height: calc\(100dvh - 24px\)/);
+  assert.match(editorBase, /resize: vertical/);
+  assert.match(editor, /setHeadingLevel\(Number\(key\)\)/);
+  assert.match(editor, /setTableDialog\(true\)/);
+  assert.match(editor, /insertBlock\("\$\$", "E = mc\^2"\)/);
+  assert.match(editor, /insertBlock\("```", "代码"\)/);
+  assert.match(toolbar, /"math-block"/);
+  assert.match(toolbar, /"code-block"/);
+  assert.match(toolbar, /label: "插入表格"/);
+  assert.doesNotMatch(toolbar, /insert: "image"|insert: "video"|command: "heading"/);
+  assert.match(contentModel, /EMPTY_CONTENT_STATE/);
+  assert.match(contentModel, /createSearchDocuments/);
+  assert.match(articleReader, /subsectionNumber = 0/);
+  assert.match(articleReader, /toc-number/);
+  assert.match(articleReader, /buildTableOfContents/);
+  assert.match(articleReader, /level === 2 \? sectionNumber : subsectionNumber/);
+  assert.match(gitignore, /\/content\/local\//);
 });

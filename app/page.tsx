@@ -1,46 +1,44 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type WheelEvent } from "react";
 import { flushSync } from "react-dom";
-import { GameIconButton, GameModal } from "./components/game-modal";
+import { GameIconButton } from "./components/game-modal";
 import { ArticleReader } from "./components/article-reader";
 import { ArticleEditor, type ArticleEditorValue } from "./components/article-editor";
 import { SectionEditorModal } from "./components/section-editor-modal";
-import { getArticleMarkdown } from "./article-markdown";
-import { SECTION_ARTICLES, type SectionArticle } from "./section-articles";
+import { EditorAccessModal } from "./components/editor-access-modal";
+import { getEditorAccess } from "./editor-auth-client";
 import { createJsonStorageStore, useHydrated, useJsonStorageState } from "./browser-storage";
+import {
+  deleteLocalArticleFile,
+  initializeLocalArticleFiles,
+  listLocalArticleFiles,
+  loadLocalArticleFile,
+  saveLocalArticleFile,
+} from "./local-article-files";
+import { loadRemoteSections, saveRemoteSections } from "./remote-sections";
 import { readAppRoute, writeAppRoute, type AppRoute } from "./navigation";
 import { FeedCarousel } from "./components/feed-carousel";
 import { SectionPage } from "./components/section-page";
-import { SearchPage, type SearchDocument } from "./components/search-page";
-import type { FeedEntry, Section } from "./content-types";
+import { SearchPage } from "./components/search-page";
+import {
+  contentFromLocalFiles,
+  contentToLocalFiles,
+  createSearchDocuments,
+  EMPTY_CONTENT_STATE,
+  markdownForArticle,
+  parseLegacyContent,
+  selectRecentFeedEntries,
+} from "./content-model";
+import { assignSectionToHotbarSlot, resolveHotbarSections } from "./hotbar-model";
+import type { ContentState, FeedEntry, SearchDocument, Section, SectionArticle } from "./content-types";
+import { MINECRAFT_UI_ICONS, normalizeSectionIcons } from "./minecraft-icons";
 
 type EditorState = { mode: "new" | "edit"; sectionId: string; title?: string };
 type SectionDialogState = { mode: "new" | "edit" };
 const KEY = "minelog-toolbar-v1";
 const CONTENT_KEY = "minelog-content-v1";
-const DEFAULTS: Section[] = [
-  { id: "ai", label: "AI 工程", icon: "/minecraft/items/redstone.png", enabled: true, description: "模型、智能体、RAG 与推理系统" },
-  { id: "web", label: "Web 开发", icon: "/minecraft/items/spyglass.png", enabled: true, description: "前端、服务端与体验工程" },
-  { id: "data", label: "数据笔记", icon: "/minecraft/items/writable_book.png", enabled: true, description: "数据库、分析与数据管道" },
-  { id: "systems", label: "系统设计", icon: "/minecraft/items/ender_eye.png", enabled: true, description: "架构、分布式系统与可靠性" },
-  { id: "toolbox", label: "工具箱", icon: "/minecraft/items/chest_minecart.png", enabled: true, description: "工作流、脚本与效率工具" },
-  { id: "reading", label: "阅读札记", icon: "/minecraft/items/nether_star.png", enabled: true, description: "书籍、论文与长期阅读" },
-  { id: "devops", label: "DevOps", icon: "/minecraft/items/redstone.png", enabled: false, description: "交付、观测与基础设施" },
-  { id: "life", label: "生活实验", icon: "/minecraft/items/bundle.png", enabled: false, description: "习惯、旅行与日常发现" },
-];
-
-type ContentState = {
-  articles: Record<string, SectionArticle[]>;
-  markdown: Record<string, string>;
-};
-
-const DEFAULT_CONTENT: ContentState = {
-  articles: Object.fromEntries(Object.entries(SECTION_ARTICLES).map(([id, articles]) => [id, [...articles]])),
-  markdown: {},
-};
-const SECTION_STORE = createJsonStorageStore(KEY, DEFAULTS);
-const CONTENT_STORE = createJsonStorageStore(CONTENT_KEY, DEFAULT_CONTENT);
+const SECTION_STORE = createJsonStorageStore<Section[]>(KEY, []);
 
 const papers: FeedEntry[] = [
   ["Nature Machine Intelligence", "Agentic Memory for Long-Horizon LLM Agents", "08.01", "14 MIN"],
@@ -55,41 +53,180 @@ function Item({ src, alt = "" }: { src: string; alt?: string }) {
   return <img className="pixel-item" src={src} alt={alt} draggable={false} />;
 }
 
+type NavigationLock = { current: boolean };
+type PageDirection = "forward" | "backward";
+
+function setPageDirection(direction?: PageDirection) {
+  if (direction) {
+    document.documentElement.dataset.pageDirection = direction;
+  } else {
+    document.documentElement.removeAttribute("data-page-direction");
+  }
+}
+
+function runPageTransition(lock: NavigationLock, update: () => void, direction?: PageDirection) {
+  setPageDirection(direction);
+  if (!document.startViewTransition) {
+    update();
+    setPageDirection();
+    return;
+  }
+
+  lock.current = true;
+  document.startViewTransition(update).finished.finally(() => {
+    lock.current = false;
+    setPageDirection();
+  });
+}
+
 export default function Home() {
   const [sections, setSections] = useJsonStorageState(SECTION_STORE);
-  const [content, setContent] = useJsonStorageState(CONTENT_STORE);
+  const [content, setContent] = useState<ContentState>(EMPTY_CONTENT_STATE);
+  const [contentReady, setContentReady] = useState(false);
+  const [sectionsRemoteReady, setSectionsRemoteReady] = useState(false);
   const hydrated = useHydrated();
   const articlesBySection = content.articles;
   const markdownOverrides = content.markdown;
   const [active, setActive] = useState("home");
-  const [settings, setSettings] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [updateLogOpen, setUpdateLogOpen] = useState(false);
+  const [draggingSectionId, setDraggingSectionId] = useState<string | null>(null);
+  const [dragOverSlot, setDragOverSlot] = useState<number | null>(null);
   const [sectionDialog, setSectionDialog] = useState<SectionDialogState | null>(null);
   const [notice, setNotice] = useState("");
   const [reading, setReading] = useState<{ sectionId: string; title: string } | null>(null);
   const [editing, setEditing] = useState<EditorState | null>(null);
+  const [editorAuthorized, setEditorAuthorized] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [hudAwake, setHudAwake] = useState(true);
   const navigating = useRef(false);
+  const dragOriginRef = useRef<"hotbar" | "more" | null>(null);
+  const draggingSectionRef = useRef<string | null>(null);
   const hudTimer = useRef<number | null>(null);
   const noticeTimer = useRef<number | null>(null);
+  const wheelSwitchAt = useRef(0);
+  const editorAuthorizedRef = useRef(false);
+  const pendingEditorAction = useRef<(() => void) | null>(null);
+  const remoteSectionsAvailable = useRef(false);
+  const remoteSectionsSaveTimer = useRef<number | null>(null);
+  const markdownRequests = useRef(new Set<string>());
 
+  useEffect(() => {
+    let disposed = false;
+    void getEditorAccess()
+      .then((result) => {
+        if (disposed) return;
+        editorAuthorizedRef.current = result.authorized;
+        setEditorAuthorized(result.authorized);
+      })
+      .catch(() => {
+        if (disposed) return;
+        editorAuthorizedRef.current = false;
+        setEditorAuthorized(false);
+      })
+      .finally(() => { if (!disposed) setAuthReady(true); });
+    return () => { disposed = true; };
+  }, []);
   const sectionsRef = useRef(sections);
   const articlesRef = useRef(articlesBySection);
+  useEffect(() => {
+    if (!hydrated) return;
+    setSections((current) => normalizeSectionIcons(current));
+  }, [hydrated, setSections]);
+
   useEffect(() => {
     sectionsRef.current = sections;
     articlesRef.current = articlesBySection;
   }, [sections, articlesBySection]);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated) return undefined;
+    let disposed = false;
+    void loadRemoteSections()
+      .then((result) => {
+        if (disposed) return;
+        remoteSectionsAvailable.current = result.available;
+        if (result.sections.length > 0) setSections(normalizeSectionIcons(result.sections));
+      })
+      .catch(() => {
+        remoteSectionsAvailable.current = false;
+      })
+      .finally(() => {
+        if (!disposed) setSectionsRemoteReady(true);
+      });
+    return () => { disposed = true; };
+  }, [hydrated, setSections]);
+
+  useEffect(() => {
+    if (!sectionsRemoteReady || !editorAuthorized || !remoteSectionsAvailable.current) return undefined;
+    if (remoteSectionsSaveTimer.current !== null) window.clearTimeout(remoteSectionsSaveTimer.current);
+    remoteSectionsSaveTimer.current = window.setTimeout(() => {
+      void saveRemoteSections(sections).catch(() => {
+        // Article editing remains available if remote section persistence is temporarily unavailable.
+      });
+    }, 300);
+    return () => {
+      if (remoteSectionsSaveTimer.current !== null) window.clearTimeout(remoteSectionsSaveTimer.current);
+    };
+  }, [sections, sectionsRemoteReady, editorAuthorized]);
+
+  useEffect(() => {
+    if (!hydrated) return undefined;
+    let disposed = false;
+
+    const loadArticles = async () => {
+      try {
+        let result = await listLocalArticleFiles();
+        if (!result.initialized) {
+          if (!editorAuthorizedRef.current) {
+            if (!disposed) {
+              setContent(contentFromLocalFiles(result.articles));
+              setContentReady(true);
+            }
+            return;
+          }
+                    let legacyRaw: string | null = null;
+          try {
+            legacyRaw = window.localStorage.getItem(CONTENT_KEY);
+          } catch {
+            // Local Markdown files remain authoritative when browser storage is unavailable.
+          }
+          const initialContent = parseLegacyContent(legacyRaw) ?? EMPTY_CONTENT_STATE;
+          result = await initializeLocalArticleFiles(contentToLocalFiles(initialContent));
+        }
+        if (disposed) return;
+        setContent(contentFromLocalFiles(result.articles));
+        setContentReady(true);
+        try {
+          window.localStorage.removeItem(CONTENT_KEY);
+        } catch {
+          // The file store is authoritative even when legacy browser storage cannot be removed.
+        }
+      } catch (error) {
+        if (disposed) return;
+        setContentReady(true);
+        setNotice(error instanceof Error
+          ? `${error.message}\uFF0C\u5F53\u524D\u4F7F\u7528\u5185\u7F6E\u53EA\u8BFB\u6587\u7AE0`
+          : "\u672C\u5730\u6587\u7AE0\u76EE\u5F55\u4E0D\u53EF\u7528\uFF0C\u5F53\u524D\u4F7F\u7528\u5185\u7F6E\u53EA\u8BFB\u6587\u7AE0");
+      }
+    };
+
+    void loadArticles();
+    return () => {
+      disposed = true;
+    };
+  }, [hydrated, editorAuthorized]);
+
+  useEffect(() => {
+    if (!hydrated || !contentReady || !authReady || !sectionsRemoteReady) return;
 
     const applyRoute = () => {
       let route = readAppRoute();
       const routeSectionId = "sectionId" in route ? route.sectionId : undefined;
       const sectionExists = routeSectionId ? sectionsRef.current.some((section) => section.id === routeSectionId) : true;
-      const articleExists = route.view === "reader" || (route.view === "editor" && route.mode === "edit")
-        ? Boolean(routeSectionId && route.title && articlesRef.current[routeSectionId]?.some((article) => article.title === route.title))
+      const routeArticleTitle = route.view === "reader" || (route.view === "editor" && route.mode === "edit") ? route.title : undefined;
+      const articleExists = routeArticleTitle
+        ? Boolean(routeSectionId && articlesRef.current[routeSectionId]?.some((article) => article.title === routeArticleTitle))
         : true;
 
       if (!sectionExists) {
@@ -99,9 +236,18 @@ export default function Home() {
         route = { view: "section", sectionId: routeSectionId };
         writeAppRoute(route, "replace");
       }
-
-      setSettings(false);
-      setUpdateLogOpen(false);
+      if (route.view === "editor" && !editorAuthorizedRef.current) {
+        const intendedRoute = route;
+        route = route.mode === "edit" && route.title
+          ? { view: "reader", sectionId: route.sectionId, title: route.title }
+          : { view: "section", sectionId: route.sectionId };
+        writeAppRoute(route, "replace");
+        pendingEditorAction.current = () => {
+          writeAppRoute(intendedRoute);
+          window.dispatchEvent(new PopStateEvent("popstate"));
+        };
+        setAuthDialogOpen(true);
+      }
       setSectionDialog(null);
 
       if (route.view === "home") {
@@ -131,35 +277,35 @@ export default function Home() {
     applyRoute();
     window.addEventListener("popstate", applyRoute);
     return () => window.removeEventListener("popstate", applyRoute);
-  }, [hydrated]);
+  }, [hydrated, contentReady, authReady, sectionsRemoteReady]);
   const immersive = Boolean(reading || editing);
   useEffect(() => () => {
     if (hudTimer.current !== null) window.clearTimeout(hudTimer.current);
     if (noticeTimer.current !== null) window.clearTimeout(noticeTimer.current);
   }, []);
 
-  const visible = useMemo(() => sections.filter((x) => x.enabled).slice(0, 7), [sections]);
-  const hidden = useMemo(() => sections.filter((x) => !visible.some((y) => y.id === x.id)), [sections, visible]);
-  const recentHistory = useMemo<FeedEntry[]>(() => sections
-    .flatMap((section) => (articlesBySection[section.id] ?? []).map((article) => [section.label, article.title, article.date, article.read, section.id] as FeedEntry))
-    .sort((a, b) => b[2].localeCompare(a[2]))
-    .slice(0, 20), [sections, articlesBySection]);
-  const recentPosts = useMemo(() => recentHistory.slice(0, 5), [recentHistory]);
-  const searchDocuments = useMemo<SearchDocument[]>(() => sections.flatMap((section) =>
-    (articlesBySection[section.id] ?? []).map((article) => ({
-      sectionId: section.id,
-      sectionLabel: section.label,
-      sectionIcon: section.icon,
-      article,
-      markdown: markdownOverrides[`${section.id}:${article.title}`] ?? getArticleMarkdown(article),
-    }))
-  ), [sections, articlesBySection, markdownOverrides]);
-  const activeSection = sections.find((x) => x.id === active);
-  const readingSection = reading ? sections.find((section) => section.id === reading.sectionId) : undefined;
+  const sectionById = useMemo(() => new Map(sections.map((section) => [section.id, section])), [sections]);
+  const hotbarSections = useMemo(() => resolveHotbarSections(sections), [sections]);
+  const visible = useMemo(() => hotbarSections.filter((section): section is Section => Boolean(section)), [hotbarSections]);
+  const visibleSectionIds = useMemo(() => new Set(visible.map((section) => section.id)), [visible]);
+  const hidden = useMemo(() => sections.filter((section) => !visibleSectionIds.has(section.id)), [sections, visibleSectionIds]);
+  const recentPosts = useMemo<FeedEntry[]>(
+    () => selectRecentFeedEntries(sections, articlesBySection),
+    [sections, articlesBySection],
+  );
+  const searchDocuments = useMemo<SearchDocument[]>(
+    () => createSearchDocuments(sections, articlesBySection, markdownOverrides),
+    [sections, articlesBySection, markdownOverrides],
+  );
+  const activeSection = sectionById.get(active);
+  const readingSection = reading ? sectionById.get(reading.sectionId) : undefined;
   const readingArticle = reading ? articlesBySection[reading.sectionId]?.find((article) => article.title === reading.title) : undefined;
   const editingArticle = editing?.mode === "edit" ? articlesBySection[editing.sectionId]?.find((article) => article.title === editing.title) : undefined;
-  const articleMarkdown = (sectionId: string, article: SectionArticle) => markdownOverrides[`${sectionId}:${article.title}`] ?? getArticleMarkdown(article);
-  const editorInitialValue = editing ? {
+  const articleMarkdown = (sectionId: string, article: SectionArticle) => markdownForArticle(markdownOverrides, sectionId, article);
+  const hasMarkdown = useCallback((sectionId: string, title: string) => Object.prototype.hasOwnProperty.call(markdownOverrides, `${sectionId}::${title}`), [markdownOverrides]);
+  const readingMarkdownReady = Boolean(reading && readingArticle && hasMarkdown(reading.sectionId, readingArticle.title));
+  const editingMarkdownReady = editing?.mode !== "edit" || Boolean(editingArticle && hasMarkdown(editing.sectionId, editingArticle.title));
+  const editorInitialValue = editing && editingMarkdownReady ? {
     sectionId: editing.sectionId,
     title: editingArticle?.title ?? "",
     summary: editingArticle?.summary ?? "",
@@ -167,28 +313,57 @@ export default function Home() {
     markdown: editingArticle ? articleMarkdown(editing.sectionId, editingArticle) : "",
   } : undefined;
 
+  useEffect(() => {
+    const target = editing?.mode === "edit" && editingArticle
+      ? { sectionId: editing.sectionId, title: editingArticle.title }
+      : reading && readingArticle
+        ? { sectionId: reading.sectionId, title: readingArticle.title }
+        : undefined;
+    if (!target || hasMarkdown(target.sectionId, target.title)) return;
+    const key = `${target.sectionId}::${target.title}`;
+    if (markdownRequests.current.has(key)) return;
+    markdownRequests.current.add(key);
+    void loadLocalArticleFile(target.sectionId, target.title)
+      .then(({ article }) => {
+        if (typeof article.markdown !== "string") return;
+        setContent((current) => ({
+          ...current,
+          markdown: { ...current.markdown, [key]: article.markdown as string },
+        }));
+      })
+      .catch(() => {
+        markdownRequests.current.delete(key);
+        setNotice("文章正文载入失败，请稍后重试");
+      });
+  }, [editing, editingArticle, reading, readingArticle, hasMarkdown]);
+
 
   const ping = (message: string) => {
     if (noticeTimer.current !== null) window.clearTimeout(noticeTimer.current);
     setNotice(message);
     noticeTimer.current = window.setTimeout(() => setNotice(""), 2400);
   };
-  const move = (index: number, step: number) => {
-    const to = index + step;
-    if (to < 0 || to >= sections.length) return;
-    const next = [...sections];
-    [next[index], next[to]] = [next[to], next[index]];
-    setSections(next);
+  const requestEditorAccess = (action: () => void) => {
+    if (editorAuthorizedRef.current) {
+      action();
+      return;
+    }
+    pendingEditorAction.current = action;
+    setAuthDialogOpen(true);
   };
-  const toggle = (id: string) => {
-    const count = sections.filter((x) => x.enabled).length;
-    setSections(sections.map((x) => {
-      if (x.id !== id) return x;
-      if (!x.enabled && count >= 7) { ping("工具槽最多展示 7 个动态板块"); return x; }
-      return { ...x, enabled: !x.enabled };
-    }));
+  const finishEditorAuthorization = () => {
+    editorAuthorizedRef.current = true;
+    setEditorAuthorized(true);
+    setAuthDialogOpen(false);
+    const action = pendingEditorAction.current;
+    pendingEditorAction.current = null;
+    action?.();
   };
-  const saveSection = (value: Pick<Section, "id" | "label" | "icon" | "description">) => {
+  const closeEditorAuthorization = () => {
+    pendingEditorAction.current = null;
+    setAuthDialogOpen(false);
+  };  const saveSection = (value: Pick<Section, "id" | "label" | "icon" | "description">) => {
+    if (!editorAuthorizedRef.current) return;
     if (!sectionDialog) return;
     if (sectionDialog.mode === "new") {
       const id = createSectionId();
@@ -201,7 +376,14 @@ export default function Home() {
     }
     setSectionDialog(null);
   };
-  const deleteSection = (id: string) => {
+  const deleteSection = async (id: string) => {
+    if (!editorAuthorizedRef.current) return;
+    try {
+      await deleteLocalArticleFile(id);
+    } catch (error) {
+      ping(error instanceof Error ? error.message : "\u5220\u9664\u677F\u5757\u6587\u4EF6\u5931\u8D25");
+      return;
+    }
     setSections((current) => current.filter((section) => section.id !== id));
     setContent((current) => ({
       articles: Object.fromEntries(Object.entries(current.articles).filter(([sectionId]) => sectionId !== id)) as Record<string, SectionArticle[]>,
@@ -232,9 +414,61 @@ export default function Home() {
     hudTimer.current = window.setTimeout(() => setHudAwake(false), 900);
   };
 
+  const beginSectionDrag = (event: DragEvent<HTMLElement>, sectionId: string, origin: "hotbar" | "more") => {
+    if (!editorAuthorizedRef.current) {
+      event.preventDefault();
+      requestEditorAccess(() => undefined);
+      return;
+    }
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("application/x-minelog-section", sectionId);
+    event.dataTransfer.setData("text/plain", sectionId);
+    const dragIcon = event.currentTarget.querySelector<HTMLImageElement>(".pixel-item");
+    if (dragIcon) event.dataTransfer.setDragImage(dragIcon, dragIcon.offsetWidth / 2, dragIcon.offsetHeight / 2);
+    dragOriginRef.current = origin;
+    draggingSectionRef.current = sectionId;
+    setDraggingSectionId(sectionId);
+  };
+
+  const finishSectionDrag = (event?: DragEvent<HTMLElement>) => {
+    const releaseTarget = event ? document.elementFromPoint(event.clientX, event.clientY) : null;
+    if (event && dragOriginRef.current === "hotbar" && active === "more" && !releaseTarget?.closest(".game-hud")) {
+      const sectionId = draggingSectionRef.current;
+      if (sectionId) {
+        setSections((current) => current.map((section) => section.id === sectionId
+          ? { ...section, enabled: false, hotbarSlot: undefined }
+          : section));
+        ping("板块已移入更多板块页");
+      }
+    }
+    dragOriginRef.current = null;
+    draggingSectionRef.current = null;
+    setDraggingSectionId(null);
+    setDragOverSlot(null);
+  };
+
+  const placeSectionInSlot = (sectionId: string, targetSlot: number) => {
+    setSections((current) => assignSectionToHotbarSlot(current, sectionId, targetSlot));
+    ping("\u5DE5\u5177\u69FD\u4F4D\u7F6E\u5DF2\u66F4\u65B0");
+  };
+  const allowSectionDrop = (event: DragEvent<HTMLElement>, slot: number) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    if (dragOverSlot !== slot) setDragOverSlot(slot);
+  };
+
+  const dropSectionInSlot = (event: DragEvent<HTMLElement>, slot: number) => {
+    event.preventDefault();
+    const sectionId = event.dataTransfer.getData("application/x-minelog-section")
+      || event.dataTransfer.getData("text/plain")
+      || draggingSectionId;
+    if (sectionId) placeSectionInSlot(sectionId, slot);
+    finishSectionDrag();
+  };
+
   const slots: Array<Section | "home" | "more" | null> = Array(9).fill(null);
   slots[0] = "home";
-  visible.forEach((x, i) => { slots[i + 1] = x; });
+  hotbarSections.forEach((section, index) => { slots[index + 1] = section; });
   slots[8] = "more";
 
   const openSearch = () => {
@@ -244,9 +478,7 @@ export default function Home() {
       flushSync(() => { setActive("search"); setSearchQuery(""); setReading(null); setEditing(null); setHudAwake(true); });
       document.querySelector<HTMLElement>(".content-viewport")?.scrollTo({ top: 0 });
     };
-    if (!document.startViewTransition) { update(); return; }
-    navigating.current = true;
-    document.startViewTransition(update).finished.finally(() => { navigating.current = false; });
+    runPageTransition(navigating, update);
   };
 
   const updateSearchQuery = (query: string) => {
@@ -256,8 +488,7 @@ export default function Home() {
   const navigate = (next: string) => {
     if (navigating.current || (next === active && !immersive)) return;
     const order = ["home", ...sections.map((section) => section.id), "more"];
-    const direction = order.indexOf(next) >= order.indexOf(active) ? "forward" : "backward";
-    const root = document.documentElement;
+    const direction: PageDirection = order.indexOf(next) >= order.indexOf(active) ? "forward" : "backward";
     const route: AppRoute = next === "home" ? { view: "home" } : next === "more" ? { view: "more" } : { view: "section", sectionId: next };
     const update = () => {
       writeAppRoute(route);
@@ -265,20 +496,30 @@ export default function Home() {
       document.querySelector<HTMLElement>(".content-viewport")?.scrollTo({ top: 0 });
     };
 
-    root.dataset.pageDirection = direction;
-    if (!document.startViewTransition) {
-      update();
-      delete root.dataset.pageDirection;
-      return;
-    }
-
-    navigating.current = true;
-    document.startViewTransition(update).finished.finally(() => {
-      navigating.current = false;
-      delete root.dataset.pageDirection;
-    });
+    runPageTransition(navigating, update, direction);
   };
 
+  const switchHotbarPage = (event: WheelEvent<HTMLElement>) => {
+    if (event.ctrlKey || draggingSectionId) return;
+    const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+    if (Math.abs(delta) < 3) return;
+    event.preventDefault();
+
+    const now = window.performance.now();
+    if (navigating.current || now - wheelSwitchAt.current < 420) return;
+    const pages = slots.reduce<string[]>((items, slot) => {
+      if (slot) items.push(typeof slot === "string" ? slot : slot.id);
+      return items;
+    }, []);
+    if (pages.length < 2) return;
+
+    const step = delta > 0 ? 1 : -1;
+    const currentIndex = pages.indexOf(active);
+    const baseIndex = currentIndex >= 0 ? currentIndex : step > 0 ? -1 : 0;
+    const next = pages[(baseIndex + step + pages.length) % pages.length];
+    wheelSwitchAt.current = now;
+    navigate(next);
+  };
   const openReader = (sectionId: string, title: string) => {
     if (navigating.current) return;
     const update = () => {
@@ -286,9 +527,7 @@ export default function Home() {
       flushSync(() => { setActive(sectionId); setReading({ sectionId, title }); setEditing(null); setHudAwake(false); });
       document.querySelector<HTMLElement>(".content-viewport")?.scrollTo({ top: 0 });
     };
-    if (!document.startViewTransition) { update(); return; }
-    navigating.current = true;
-    document.startViewTransition(update).finished.finally(() => { navigating.current = false; });
+    runPageTransition(navigating, update);
   };
 
   const closeReader = () => {
@@ -303,12 +542,14 @@ export default function Home() {
       flushSync(() => { setActive(sectionId); setReading(null); setHudAwake(true); });
       document.querySelector<HTMLElement>(".content-viewport")?.scrollTo({ top: 0 });
     };
-    if (!document.startViewTransition) { update(); return; }
-    navigating.current = true;
-    document.startViewTransition(update).finished.finally(() => { navigating.current = false; });
+    runPageTransition(navigating, update);
   };
 
   const openEditor = (state: EditorState) => {
+    if (!editorAuthorizedRef.current) {
+      requestEditorAccess(() => openEditor(state));
+      return;
+    }
     if (navigating.current) return;
     const update = () => {
       writeAppRoute({ view: "editor", sectionId: state.sectionId, mode: state.mode, title: state.title });
@@ -320,9 +561,7 @@ export default function Home() {
       });
       document.querySelector<HTMLElement>(".content-viewport")?.scrollTo({ top: 0 });
     };
-    if (!document.startViewTransition) { update(); return; }
-    navigating.current = true;
-    document.startViewTransition(update).finished.finally(() => { navigating.current = false; });
+    runPageTransition(navigating, update);
   };
 
   const closeEditor = () => {
@@ -339,8 +578,8 @@ export default function Home() {
     document.querySelector<HTMLElement>(".content-viewport")?.scrollTo({ top: 0 });
   };
 
-  const saveArticle = (value: ArticleEditorValue) => {
-    if (!editing) return;
+  const saveArticle = async (value: ArticleEditorValue) => {
+    if (!editing || !editorAuthorizedRef.current) return;
     const today = new Date();
     const date = `${String(today.getMonth() + 1).padStart(2, "0")}.${String(today.getDate()).padStart(2, "0")}`;
     const nextArticle: SectionArticle = {
@@ -350,6 +589,20 @@ export default function Home() {
       date,
       read: `${Math.max(1, Math.ceil(value.markdown.replace(/\s/g, "").length / 500))} MIN`,
     };
+
+    try {
+      await saveLocalArticleFile({
+        ...nextArticle,
+        sectionId: value.sectionId,
+        markdown: value.markdown,
+        updatedAt: new Date().toISOString(),
+      }, editing.mode === "edit" && editing.title
+        ? { sectionId: editing.sectionId, title: editing.title }
+        : undefined);
+    } catch (error) {
+      ping(error instanceof Error ? error.message : "\u4FDD\u5B58 Markdown \u6587\u4EF6\u5931\u8D25");
+      return;
+    }
 
     setContent((current) => {
       const articles = Object.fromEntries(Object.entries(current.articles).map(([id, entries]) => [id, [...entries]])) as Record<string, SectionArticle[]>;
@@ -370,9 +623,15 @@ export default function Home() {
     document.querySelector<HTMLElement>(".content-viewport")?.scrollTo({ top: 0 });
     ping(editing.mode === "edit" ? "文章修改已保存" : "新文章已保存");
   };
-  const deleteArticle = () => {
-    if (!editing || editing.mode !== "edit" || !editing.title) return;
+  const deleteArticle = async () => {
+    if (!editing || editing.mode !== "edit" || !editing.title || !editorAuthorizedRef.current) return;
     const { sectionId, title } = editing;
+    try {
+      await deleteLocalArticleFile(sectionId, title);
+    } catch (error) {
+      ping(error instanceof Error ? error.message : "\u5220\u9664 Markdown \u6587\u4EF6\u5931\u8D25");
+      return;
+    }
     setContent((current) => {
       const markdown = { ...current.markdown };
       delete markdown[`${sectionId}:${title}`];
@@ -399,16 +658,15 @@ export default function Home() {
         <span className="brand-cube" /><strong>MINELOG</strong>
       </button>
       <div className="top-actions">
-        {active === "home" && !immersive && <GameIconButton className="search-trigger" icon="/minecraft/items/spyglass.png" label="搜索全部文章" onClick={openSearch} />}
-        {active === "home" && !immersive && <GameIconButton className="settings-trigger" icon="/minecraft/items/comparator.png" label="打开工具槽设置" onClick={() => setSettings(true)} />}
-        {active === "more" && !immersive && sections.length > 0 && <GameIconButton className="section-edit-trigger" icon="/minecraft/items/writable_book.png" label="编辑板块" onClick={() => setSectionDialog({ mode: "edit" })} />}
-        {activeSection && !immersive && <GameIconButton className="new-article-trigger" icon="/minecraft/items/writable_book.png" label={`在${activeSection.label}新增文章`} onClick={() => openEditor({ mode: "new", sectionId: activeSection.id })} />}
-        {reading && readingArticle && !editing && <GameIconButton className="reader-edit-trigger" icon="/minecraft/items/writable_book.png" label="编辑当前文章" onClick={() => openEditor({ mode: "edit", sectionId: reading.sectionId, title: readingArticle.title })} />}
+        {active === "home" && !immersive && <GameIconButton className="search-trigger" icon={MINECRAFT_UI_ICONS.search} label="搜索全部文章" onClick={openSearch} />}
+        {active === "more" && !immersive && sections.length > 0 && <GameIconButton className="section-edit-trigger" icon={MINECRAFT_UI_ICONS.manageSections} label="编辑板块" onClick={() => requestEditorAccess(() => setSectionDialog({ mode: "edit" }))} />}
+        {activeSection && !immersive && <GameIconButton className="new-article-trigger" icon={MINECRAFT_UI_ICONS.createArticle} label={`在${activeSection.label}新增文章`} onClick={() => openEditor({ mode: "new", sectionId: activeSection.id })} />}
+        {reading && readingArticle && !editing && <GameIconButton className="reader-edit-trigger" icon={MINECRAFT_UI_ICONS.editArticle} label="编辑当前文章" onClick={() => openEditor({ mode: "edit", sectionId: reading.sectionId, title: readingArticle.title })} />}
       </div>
     </header>
 
     <section className={`content-viewport${immersive ? " is-reading" : ""}`} aria-live="polite">
-      {editing && editorInitialValue ? <ArticleEditor mode={editing.mode} sections={sections} initialValue={editorInitialValue} onCancel={closeEditor} onSave={saveArticle} onDelete={editing.mode === "edit" ? deleteArticle : undefined} /> : readingSection && readingArticle ? <ArticleReader section={readingSection} article={readingArticle} markdown={articleMarkdown(readingSection.id, readingArticle)} onBack={closeReader} /> : <>
+      {editing ? (editorInitialValue ? <ArticleEditor mode={editing.mode} sections={sections} initialValue={editorInitialValue} onCancel={closeEditor} onSave={saveArticle} onDelete={editing.mode === "edit" ? deleteArticle : undefined} /> : <div className="content-loading-state" role="status">正在载入文章正文…</div>) : readingSection && readingArticle ? (readingMarkdownReady ? <ArticleReader section={readingSection} article={readingArticle} markdown={articleMarkdown(readingSection.id, readingArticle)} onBack={closeReader} /> : <div className="content-loading-state" role="status">正在载入文章正文…</div>) : <>
       {active === "home" && <div className="home-content">
         <div className="hero-copy">
           <h1 className="hero-title"><img className="hero-title-image" src="/minecraft/ui/minelog-title.png" alt="MINELOG" /></h1>
@@ -417,17 +675,15 @@ export default function Home() {
         <div className="broadcast-grid">
           <section className="broadcast-panel recent-panel">
             <div className="panel-heading"><div><p className="panel-kicker">WORLD LOG / 01</p><h2>最近更新</h2></div><span className="live-chip"><i /> LIVE</span></div>
-            <FeedCarousel entries={recentPosts} arrow="/minecraft/items/arrow.png" onOpen={(entry) => {
-              const section = sections.find((item) => item.id === entry[4]);
+            <FeedCarousel entries={recentPosts} arrow={MINECRAFT_UI_ICONS.back} onOpen={(entry) => {
+              const section = sectionById.get(entry[4] ?? "");
               const article = section ? articlesBySection[section.id]?.find((item) => item.title === entry[1]) : undefined;
               if (section && article) openReader(section.id, article.title); else ping("该文章正文尚未录入");
             }} />
-            <button className="panel-link" onClick={() => setUpdateLogOpen(true)}><span>查看全部记录</span><img className="link-arrow" src="/minecraft/items/arrow.png" alt="" /></button>
           </section>
           <section className="broadcast-panel paper-panel">
             <div className="panel-heading"><div><p className="panel-kicker">PAPER FEED / 02</p><h2>论文推送</h2></div><span className="live-chip paper-chip"><i /> FEED</span></div>
-            <FeedCarousel entries={papers} arrow="/minecraft/items/spectral_arrow.png" onOpen={() => ping("Paper Feed 接口将在后续阶段接入")} />
-            <button className="panel-link" onClick={() => ping("论文索引将在订阅源接入后开放")}><span>查看全部论文</span><img className="link-arrow" src="/minecraft/items/spectral_arrow.png" alt="" /></button>
+            <FeedCarousel entries={papers} arrow={MINECRAFT_UI_ICONS.paperLink} onOpen={() => ping("Paper Feed 接口将在后续阶段接入")} />
           </section>
         </div>
       </div>}
@@ -442,24 +698,60 @@ export default function Home() {
 
       {active === "more" && <div className="more-page">
         <header className="section-hero more-hero">
-          <div className="section-title"><h1>更多板块</h1><span>未放入快捷工具槽的板块，都集中存放在这里。</span></div>
+          <div className="section-title"><h1>更多板块</h1><span>板块可拖入工具槽；将槽内板块拖出工具槽即可移回此页。</span></div>
         </header>
-        <div className="more-grid">{(hidden.length ? hidden : sections).map((x) =>
-          <button type="button" key={x.id} onClick={() => navigate(x.id)}><span className="block-swatch"><Item src={x.icon} /></span><span className="more-copy"><strong>{x.label}</strong><small>{x.description}</small></span><img className="more-arrow" src="/minecraft/items/arrow.png" alt="" /></button>)}
-          <button type="button" className="more-add-card" onClick={() => setSectionDialog({ mode: "new" })}><span className="block-swatch more-add-swatch"><Item src="/minecraft/items/writable_book.png" /></span><span className="more-copy"><strong>新增板块</strong><small>设置图标、大标题与副标题</small></span><span className="more-add-mark" aria-hidden="true">＋</span></button>
+        <div className={`more-grid${draggingSectionId ? " has-active-drag" : ""}`}>{hidden.map((x) =>
+          <button
+            type="button"
+            key={x.id}
+            className={draggingSectionId === x.id ? "is-dragging" : ""}
+            draggable={editorAuthorized}
+            onDragStart={(event) => beginSectionDrag(event, x.id, "more")}
+            onDragEnd={finishSectionDrag}
+            onClick={() => navigate(x.id)}
+            aria-label={`${x.label}，按住可拖入工具槽`}
+          >
+            <span className="block-swatch"><Item src={x.icon} /></span>
+            <span className="more-copy"><strong>{x.label}</strong><small>{x.description}</small></span>
+            <span className="more-drag-handle" aria-hidden="true">⋮</span>
+          </button>)}
+          <button type="button" className="more-add-card" onClick={() => requestEditorAccess(() => setSectionDialog({ mode: "new" }))}><span className="block-swatch more-add-swatch"><Item src={MINECRAFT_UI_ICONS.createSection} /></span><span className="more-copy"><strong>新增板块</strong><small>设置图标、大标题与副标题</small></span><span className="more-add-mark" aria-hidden="true">＋</span></button>
         </div>
       </div>}
       </>}
     </section>
 
-    <nav className={`game-hud${immersive ? (hudAwake ? " reader-hud-awake" : " reader-hud-hidden") : ""}`} aria-label="页面工具槽" onPointerEnter={holdHud} onPointerLeave={releaseHud} onFocus={holdHud} onBlur={releaseHud}>
+    <nav className={`game-hud${immersive ? (hudAwake ? " reader-hud-awake" : " reader-hud-hidden") : ""}`} aria-label="页面工具槽" onWheel={switchHotbarPage} onPointerEnter={holdHud} onPointerLeave={releaseHud} onFocus={holdHud} onBlur={releaseHud}>
       <div className="hotbar-shell"><img className="hotbar-frame" src="/minecraft/hud/hotbar.png" alt="" /><div className="hotbar-slots">
         {slots.map((slot, i) => {
-          if (!slot) return <span className="empty-slot" key={"empty-" + i} />;
+          if (!slot) return <button
+            type="button"
+            className={`empty-slot${dragOverSlot === i ? " is-drop-target" : ""}`}
+            key={"empty-" + i}
+            onDragOver={(event) => allowSectionDrop(event, i)}
+            onDragEnter={() => setDragOverSlot(i)}
+            onDrop={(event) => dropSectionInSlot(event, i)}
+            aria-label={`空工具槽 ${i}，可拖入板块`}
+          ><span aria-hidden="true">·</span></button>;
           const id = typeof slot === "string" ? slot : slot.id;
           const label = slot === "home" ? "首页" : slot === "more" ? "更多" : slot.label;
-          const icon = slot === "home" ? "/minecraft/items/book.png" : slot === "more" ? "/minecraft/items/bundle.png" : slot.icon;
-          return <button key={id} className={active === id ? "active" : ""} onClick={() => navigate(id)} aria-label={"前往" + label} aria-current={active === id ? "page" : undefined}><Item src={icon} /><span className="slot-tooltip">{i + 1} · {label}</span></button>;
+          const icon = slot === "home" ? MINECRAFT_UI_ICONS.home : slot === "more" ? MINECRAFT_UI_ICONS.more : slot.icon;
+          const draggable = typeof slot !== "string" && editorAuthorized;
+          const className = [active === id ? "active" : "", draggingSectionId === id ? "is-dragging" : "", dragOverSlot === i ? "is-drop-target" : ""].filter(Boolean).join(" ");
+          return <button
+            type="button"
+            key={id}
+            className={className}
+            draggable={draggable}
+            onDragStart={draggable ? (event) => beginSectionDrag(event, id, "hotbar") : undefined}
+            onDragEnd={draggable ? finishSectionDrag : undefined}
+            onDragOver={draggable ? (event) => allowSectionDrop(event, i) : undefined}
+            onDragEnter={draggable ? () => setDragOverSlot(i) : undefined}
+            onDrop={draggable ? (event) => dropSectionInSlot(event, i) : undefined}
+            onClick={() => navigate(id)}
+            aria-label={draggable ? `${label}，可拖动调整工具槽位置` : `前往${label}`}
+            aria-current={active === id ? "page" : undefined}
+          ><Item src={icon} /><span className="slot-tooltip">{label}</span></button>;
         })}
       </div></div>
     </nav>
@@ -467,55 +759,15 @@ export default function Home() {
 
     {notice && <div className="toast" role="status">{notice}</div>}
 
+    {authDialogOpen && <EditorAccessModal onAuthorized={finishEditorAuthorization} onClose={closeEditorAuthorization} />}
+
     {sectionDialog && <SectionEditorModal
       mode={sectionDialog.mode}
-      sections={hidden.length ? hidden : sections}
+      sections={sections}
       onClose={() => setSectionDialog(null)}
       onSave={saveSection}
       onDelete={deleteSection}
     />}
-
-    {updateLogOpen && <GameModal
-      className="update-history-modal"
-      eyebrow="WORLD LOG / ARCHIVE"
-      title="最近更新记录"
-      description="按更新时间排列最近 20 篇文章；点击任意记录可直接进入阅读。"
-      icon="/minecraft/items/book.png"
-      onClose={() => setUpdateLogOpen(false)}
-      footer={<><span className="update-history__summary">已显示最近 {recentHistory.length} 条</span><button className="pixel-button modal-done" onClick={() => setUpdateLogOpen(false)}>关闭</button></>}
-    >
-      <div className="update-history-list">
-        {recentHistory.map((entry, index) => <button className="update-history-entry" type="button" key={(entry[4] ?? entry[0]) + ":" + entry[1]} onClick={() => {
-          const section = sections.find((item) => item.id === entry[4]);
-          const article = section ? articlesBySection[section.id]?.find((item) => item.title === entry[1]) : undefined;
-          if (section && article) { setUpdateLogOpen(false); openReader(section.id, article.title); }
-        }}>
-          <span className="update-history-entry__index">{String(index + 1).padStart(2, "0")}</span>
-          <span className="update-history-entry__copy"><small>{entry[0]} · {entry[2]}</small><strong>{entry[1]}</strong></span>
-          <span className="update-history-entry__read">{entry[3]}<img src="/minecraft/items/arrow.png" alt="" /></span>
-        </button>)}
-        {recentHistory.length === 0 && <p className="update-history-empty">暂无文章更新记录</p>}
-      </div>
-    </GameModal>}
-    {settings && <GameModal
-      eyebrow="HOTBAR LOADOUT"
-      title="工具槽配置"
-      description="选择常驻板块并调整顺序；修改会自动保存在当前设备。"
-      icon="/minecraft/items/comparator.png"
-      onClose={() => setSettings(false)}
-      footer={<><span className="slot-usage"><b>{visible.length}</b> / 7 个动态槽位</span><button className="pixel-button modal-done" onClick={() => setSettings(false)}>完成</button></>}
-    >
-      <div className="section-settings">{sections.map((x, i) => <div className={"setting-row " + (x.enabled ? "enabled" : "")} key={x.id}>
-        <span className="setting-icon"><Item src={x.icon} /></span>
-        <span className="setting-name"><strong>{x.label}</strong><small>{x.description}</small></span>
-        <span className="order-controls" role="group" aria-label={"调整" + x.label + "的顺序"}>
-          <button onClick={() => move(i, -1)} disabled={i === 0} aria-label="向前移动"><span aria-hidden="true">↑</span></button>
-          <button onClick={() => move(i, 1)} disabled={i === sections.length - 1} aria-label="向后移动"><span aria-hidden="true">↓</span></button>
-        </span>
-        <button className="toggle-button" onClick={() => toggle(x.id)} aria-pressed={x.enabled}><i /><span>{x.enabled ? "已展示" : "未展示"}</span></button>
-      </div>)}</div>
-    </GameModal>}
-
   </main>;
 }
 
