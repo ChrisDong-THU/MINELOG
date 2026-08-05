@@ -22,6 +22,7 @@ import { FeedCarousel } from "./components/feed-carousel";
 import { SectionPage } from "./components/section-page";
 import { SearchPage } from "./components/search-page";
 import {
+  articleMarkdownKey,
   contentFromLocalFiles,
   contentToLocalFiles,
   createSearchDocuments,
@@ -302,7 +303,7 @@ export default function Home() {
   const readingArticle = reading ? articlesBySection[reading.sectionId]?.find((article) => article.title === reading.title) : undefined;
   const editingArticle = editing?.mode === "edit" ? articlesBySection[editing.sectionId]?.find((article) => article.title === editing.title) : undefined;
   const articleMarkdown = (sectionId: string, article: SectionArticle) => markdownForArticle(markdownOverrides, sectionId, article);
-  const hasMarkdown = useCallback((sectionId: string, title: string) => Object.prototype.hasOwnProperty.call(markdownOverrides, `${sectionId}::${title}`), [markdownOverrides]);
+  const hasMarkdown = useCallback((sectionId: string, title: string) => Object.prototype.hasOwnProperty.call(markdownOverrides, articleMarkdownKey(sectionId, title)), [markdownOverrides]);
   const readingMarkdownReady = Boolean(reading && readingArticle && hasMarkdown(reading.sectionId, readingArticle.title));
   const editingMarkdownReady = editing?.mode !== "edit" || Boolean(editingArticle && hasMarkdown(editing.sectionId, editingArticle.title));
   const editorInitialValue = editing && editingMarkdownReady ? {
@@ -320,7 +321,7 @@ export default function Home() {
         ? { sectionId: reading.sectionId, title: readingArticle.title }
         : undefined;
     if (!target || hasMarkdown(target.sectionId, target.title)) return;
-    const key = `${target.sectionId}::${target.title}`;
+    const key = articleMarkdownKey(target.sectionId, target.title);
     if (markdownRequests.current.has(key)) return;
     markdownRequests.current.add(key);
     void loadLocalArticleFile(target.sectionId, target.title)
@@ -609,10 +610,10 @@ export default function Home() {
       const markdown = { ...current.markdown };
       if (editing.mode === "edit") {
         articles[editing.sectionId] = (articles[editing.sectionId] ?? []).filter((article) => article.title !== editing.title);
-        delete markdown[`${editing.sectionId}:${editing.title}`];
+        delete markdown[articleMarkdownKey(editing.sectionId, editing.title)];
       }
       articles[value.sectionId] = [nextArticle, ...(articles[value.sectionId] ?? []).filter((article) => article.title !== value.title)];
-      markdown[`${value.sectionId}:${value.title}`] = value.markdown;
+      markdown[articleMarkdownKey(value.sectionId, value.title)] = value.markdown;
       return { articles, markdown };
     });
     setActive(value.sectionId);
@@ -634,7 +635,7 @@ export default function Home() {
     }
     setContent((current) => {
       const markdown = { ...current.markdown };
-      delete markdown[`${sectionId}:${title}`];
+      delete markdown[articleMarkdownKey(sectionId, title)];
       return {
         articles: {
           ...current.articles,

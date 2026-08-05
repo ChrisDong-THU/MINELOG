@@ -167,6 +167,9 @@ test("keeps navigation, rendering and local content storage in focused modules",
   assert.doesNotMatch(toolbar, /insert: "image"|insert: "video"|command: "heading"/);
   assert.match(contentModel, /EMPTY_CONTENT_STATE/);
   assert.match(contentModel, /createSearchDocuments/);
+  assert.match(contentModel, /export function articleMarkdownKey/);
+  assert.match(page, /articleMarkdownKey\(target\.sectionId, target\.title\)/);
+  assert.doesNotMatch(page, /\$\{(?:sectionId|target\.sectionId)\}::/);
   assert.match(articleReader, /subsectionNumber = 0/);
   assert.match(articleReader, /toc-number/);
   assert.match(articleReader, /buildTableOfContents/);

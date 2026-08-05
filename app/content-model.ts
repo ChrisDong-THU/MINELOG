@@ -4,6 +4,10 @@ import type { LocalArticleFile } from "./local-article-files";
 
 export const EMPTY_CONTENT_STATE: ContentState = { articles: {}, markdown: {} };
 
+export function articleMarkdownKey(sectionId: string, title: string) {
+  return `${sectionId}:${title}`;
+}
+
 export function parseLegacyContent(raw: string | null): ContentState | null {
   if (!raw) return null;
   try {
@@ -23,7 +27,7 @@ export function contentToLocalFiles(content: ContentState, migratedAt = Date.now
   return Object.entries(content.articles).flatMap(([sectionId, articles]) => articles.map((article) => ({
     ...article,
     sectionId,
-    markdown: content.markdown[`${sectionId}:${article.title}`] ?? getArticleMarkdown(article),
+    markdown: content.markdown[articleMarkdownKey(sectionId, article.title)] ?? getArticleMarkdown(article),
     updatedAt: new Date(migratedAt - order++ * 1000).toISOString(),
   })));
 }
@@ -40,7 +44,7 @@ export function contentFromLocalFiles(files: LocalArticleFile[]): ContentState {
       tags: file.tags,
     };
     (articles[file.sectionId] ??= []).push(article);
-    if (typeof file.markdown === "string") markdown[`${file.sectionId}:${file.title}`] = file.markdown;
+    if (typeof file.markdown === "string") markdown[articleMarkdownKey(file.sectionId, file.title)] = file.markdown;
   }
   return { articles, markdown };
 }
@@ -62,10 +66,10 @@ export function createSearchDocuments(
     sectionLabel: section.label,
     sectionIcon: section.icon,
     article,
-    markdown: markdown[`${section.id}:${article.title}`] ?? getArticleMarkdown(article),
+    markdown: markdown[articleMarkdownKey(section.id, article.title)] ?? getArticleMarkdown(article),
   })));
 }
 
 export function markdownForArticle(markdown: ContentState["markdown"], sectionId: string, article: SectionArticle) {
-  return markdown[`${sectionId}:${article.title}`] ?? getArticleMarkdown(article);
+  return markdown[articleMarkdownKey(sectionId, article.title)] ?? getArticleMarkdown(article);
 }
