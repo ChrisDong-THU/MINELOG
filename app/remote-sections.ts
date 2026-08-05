@@ -1,4 +1,4 @@
-﻿import type { Section } from "./content-types";
+import type { Section } from "./content-types";
 
 const ENDPOINT = "/api/sections";
 
@@ -12,7 +12,7 @@ async function responseJson<T>(response: Response) {
 
 export async function loadRemoteSections() {
   const response = await fetch(ENDPOINT, { cache: "no-store", credentials: "same-origin" });
-  return responseJson<{ available: boolean; sections: Section[] }>(response);
+  return responseJson<{ available: boolean; initialized?: boolean; sections: Section[] }>(response);
 }
 
 export async function saveRemoteSections(sections: Section[]) {

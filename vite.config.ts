@@ -1,8 +1,9 @@
 import vinext from "vinext";
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig } from "vite";
 import { localArticleFiles } from "./build/local-article-files-plugin";
 import { localArticleAssets } from "./build/local-article-assets-plugin";
 import { editorAuth } from "./build/editor-auth-plugin";
+import { localSections } from "./build/local-sections-plugin";
 
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
@@ -14,8 +15,7 @@ const localBindingConfig = {
   r2_buckets: [],
 };
 
-export default defineConfig(async ({ mode }) => {
-  const runtimeEnv = loadEnv(mode, process.cwd(), "");
+export default defineConfig(async () => {
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
   // settings; application environment belongs in ignored `.env*` files.
   process.env.WRANGLER_WRITE_LOGS ??= "false";
@@ -28,6 +28,7 @@ export default defineConfig(async ({ mode }) => {
     const { nitro } = await import("nitro/vite");
 
     return {
+      define: { __MINELOG_LOCAL_MODE__: "false" },
       plugins: [vinext(), ...nitro()],
     };
   }
@@ -36,11 +37,13 @@ export default defineConfig(async ({ mode }) => {
   const { cloudflare } = await import("@cloudflare/vite-plugin");
 
   return {
+    define: { __MINELOG_LOCAL_MODE__: "true" },
     server: isCodexSeatbeltSandbox
       ? { watch: { useFsEvents: false, usePolling: true } }
       : undefined,
     plugins: [
-      editorAuth(runtimeEnv.EDITOR_ACCESS_KEY),
+      editorAuth(),
+      localSections(),
       localArticleAssets(),
       localArticleFiles(),
       vinext(),

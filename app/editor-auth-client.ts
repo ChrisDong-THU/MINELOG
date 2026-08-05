@@ -1,6 +1,6 @@
-﻿const EDITOR_AUTH_ENDPOINT = "/api/editor-auth";
+const EDITOR_AUTH_ENDPOINT = "/api/editor-auth";
 
-type EditorAuthResponse = { configured: boolean; authorized: boolean; error?: string };
+type EditorAuthResponse = { configured: boolean; authorized: boolean; local?: boolean; error?: string };
 
 async function authResponse(response: Response) {
   const contentType = response.headers.get("content-type") ?? "";

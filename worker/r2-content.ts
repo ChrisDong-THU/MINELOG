@@ -1,4 +1,4 @@
-﻿const ARTICLE_API = "/api/local-articles";
+const ARTICLE_API = "/api/local-articles";
 const ASSET_API = "/api/local-assets";
 const SECTIONS_API = "/api/sections";
 const ARTICLE_INDEX_KEY = "state/article-index.json";
@@ -106,7 +106,7 @@ function normalizeSections(value: unknown): Section[] {
     ids.add(id);
     const icon = cleanText(source.icon, "板块图标", 240);
     if (!icon.startsWith("/minecraft/")) throw new Error("板块图标路径不合法");
-    const hotbarSlot = typeof source.hotbarSlot === "number" && Number.isInteger(source.hotbarSlot) && source.hotbarSlot >= 0 && source.hotbarSlot <= 6
+    const hotbarSlot = typeof source.hotbarSlot === "number" && Number.isInteger(source.hotbarSlot) && source.hotbarSlot >= 1 && source.hotbarSlot <= 7
       ? source.hotbarSlot
       : undefined;
     return {
@@ -310,14 +310,14 @@ async function handleAssets(request: Request, bucket: R2BucketLike, url: URL) {
 async function handleSections(request: Request, bucket: R2BucketLike) {
   if (request.method === "GET") {
     const object = await bucket.get(SECTIONS_KEY);
-    if (!object) return json(200, { available: true, sections: [] });
-    return json(200, { available: true, sections: normalizeSections(JSON.parse(await object.text())) });
+    if (!object) return json(200, { available: true, initialized: false, sections: [] });
+    return json(200, { available: true, initialized: true, sections: normalizeSections(JSON.parse(await object.text())) });
   }
   if (request.method === "PUT") {
     const payload = await requestJson(request, 256 * 1024) as { sections?: unknown };
     const sections = normalizeSections(payload.sections);
     await bucket.put(SECTIONS_KEY, JSON.stringify(sections), { httpMetadata: { contentType: "application/json; charset=utf-8" } });
-    return json(200, { sections });
+    return json(200, { available: true, initialized: true, sections });
   }
   return json(405, { error: "不支持的请求方法" }, { allow: "GET, PUT" });
 }

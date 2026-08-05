@@ -1,6 +1,8 @@
-﻿export const EDITOR_AUTH_PATH = "/api/editor-auth";
+export const EDITOR_AUTH_PATH = "/api/editor-auth";
 export const EDITOR_SESSION_COOKIE = "minelog_editor_session";
-const TOKEN_VERSION = "v1";
+const TOKEN_VERSION = "v2";
+export const EDITOR_SESSION_MAX_AGE_SECONDS = 5 * 24 * 60 * 60;
+const MAX_CLOCK_SKEW_SECONDS = 5 * 60;
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCK_WINDOW_MS = 15 * 60 * 1000;
 const encoder = new TextEncoder();
@@ -38,7 +40,7 @@ export async function accessKeysMatch(submitted: string, expected: string) {
   return equalBytes(left, right);
 }
 
-async function signNonce(nonce: string, accessKey: string) {
+async function signSession(issuedAt: string, nonce: string, accessKey: string) {
   const key = await crypto.subtle.importKey(
     "raw",
     encoder.encode(`minelog-editor-session:${accessKey}`),
@@ -46,19 +48,24 @@ async function signNonce(nonce: string, accessKey: string) {
     false,
     ["sign"],
   );
-  return base64Url(new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(`${TOKEN_VERSION}.${nonce}`))));
+  const payload = `${TOKEN_VERSION}.${issuedAt}.${nonce}`;
+  return base64Url(new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(payload))));
 }
 
-export async function createEditorSession(accessKey: string) {
+export async function createEditorSession(accessKey: string, issuedAtSeconds = Math.floor(Date.now() / 1000)) {
+  const issuedAt = String(issuedAtSeconds);
   const nonce = randomNonce();
-  return `${TOKEN_VERSION}.${nonce}.${await signNonce(nonce, accessKey)}`;
+  return `${TOKEN_VERSION}.${issuedAt}.${nonce}.${await signSession(issuedAt, nonce, accessKey)}`;
 }
 
 export async function verifyEditorSession(token: string | undefined, accessKey: string) {
   if (!token || !accessKey) return false;
-  const [version, nonce, signature, extra] = token.split(".");
-  if (version !== TOKEN_VERSION || !nonce || !signature || extra) return false;
-  return accessKeysMatch(signature, await signNonce(nonce, accessKey));
+  const [version, issuedAtRaw, nonce, signature, extra] = token.split(".");
+  const issuedAt = Number(issuedAtRaw);
+  if (version !== TOKEN_VERSION || !Number.isSafeInteger(issuedAt) || issuedAt < 0 || !nonce || !signature || extra) return false;
+  const ageSeconds = Math.floor(Date.now() / 1000) - issuedAt;
+  if (ageSeconds < -MAX_CLOCK_SKEW_SECONDS || ageSeconds > EDITOR_SESSION_MAX_AGE_SECONDS) return false;
+  return accessKeysMatch(signature, await signSession(issuedAtRaw, nonce, accessKey));
 }
 
 export function cookieValue(cookieHeader: string | null, name: string) {
@@ -154,7 +161,7 @@ export async function handleEditorAuthRequest(request: Request, accessKey: strin
   const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
   const token = await createEditorSession(accessKey);
   return json(200, { configured: true, authorized: true }, {
-    "set-cookie": `${EDITOR_SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict${secure}`,
+    "set-cookie": `${EDITOR_SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${EDITOR_SESSION_MAX_AGE_SECONDS}${secure}`,
   });
 }
 

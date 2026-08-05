@@ -178,3 +178,35 @@ test("keeps navigation, rendering and local content storage in focused modules",
   assert.match(articleReader, /level === 2 \? sectionNumber : subsectionNumber/);
   assert.match(gitignore, /\/content\/local\//);
 });
+
+
+test("separates local persistence and remote device trust", async () => {
+  const [page, styles, viteConfig, localAuth, localSections, remoteSections, sharedAuth, r2Content] = await Promise.all([
+    source("app/page.tsx"),
+    source("app/globals.css"),
+    source("vite.config.ts"),
+    source("build/editor-auth-plugin.ts"),
+    source("build/local-sections-plugin.ts"),
+    source("app/remote-sections.ts"),
+    source("shared/editor-auth.ts"),
+    source("worker/r2-content.ts"),
+  ]);
+
+  assert.match(page, /__MINELOG_LOCAL_MODE__/);
+  assert.match(page, /local-mode-badge/);
+  assert.match(styles, /\.local-mode-badge/);
+  assert.match(viteConfig, /__MINELOG_LOCAL_MODE__: "true"/);
+  assert.match(viteConfig, /__MINELOG_LOCAL_MODE__: "false"/);
+  assert.match(viteConfig, /localSections\(\)/);
+  assert.match(localAuth, /authorized: true/);
+  assert.match(localAuth, /local: true/);
+  assert.doesNotMatch(localAuth, /editorMutationAllowed/);
+  assert.match(localSections, /"content", "local", "\.sections\.json"/);
+  assert.match(localSections, /await rename\(temporary, filePath\)/);
+  assert.match(localSections, /initialized: await sectionsFileExists/);
+  assert.match(remoteSections, /initialized\?: boolean/);
+  assert.match(sharedAuth, /EDITOR_SESSION_MAX_AGE_SECONDS = 5 \* 24 \* 60 \* 60/);
+  assert.match(sharedAuth, /Max-Age=\$\{EDITOR_SESSION_MAX_AGE_SECONDS\}/);
+  assert.match(r2Content, /source\.hotbarSlot >= 1 && source\.hotbarSlot <= 7/);
+  assert.match(r2Content, /initialized: true, sections/);
+});

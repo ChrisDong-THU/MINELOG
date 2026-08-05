@@ -147,7 +147,7 @@ export default function Home() {
       .then((result) => {
         if (disposed) return;
         remoteSectionsAvailable.current = result.available;
-        if (result.sections.length > 0) setSections(normalizeSectionIcons(result.sections));
+        if (result.initialized || result.sections.length > 0) setSections(normalizeSectionIcons(result.sections));
       })
       .catch(() => {
         remoteSectionsAvailable.current = false;
@@ -656,7 +656,7 @@ export default function Home() {
     <div className="scene-shade" />
     <header className="topbar">
       <button className="brand-lockup" onClick={() => navigate("home")} aria-label="返回首页">
-        <span className="brand-cube" /><strong>MINELOG</strong>
+        <span className="brand-cube" /><strong>MINELOG</strong>{__MINELOG_LOCAL_MODE__ && <span className="local-mode-badge" title="本地运行模式">LOCAL</span>}
       </button>
       <div className="top-actions">
         {active === "home" && !immersive && <GameIconButton className="search-trigger" icon={MINECRAFT_UI_ICONS.search} label="搜索全部文章" onClick={openSearch} />}
