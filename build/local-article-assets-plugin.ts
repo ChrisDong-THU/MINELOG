@@ -6,7 +6,7 @@ import type { Plugin } from "vite";
 import {
   STORED_IMAGE_FILE_PATTERN,
   imageExtensionForMime,
-  imageMimeForExtension,
+  imageMimeForStoredFile,
   imageResponseSecurityHeaders,
   normalizeImageMime,
 } from "../shared/image-assets.ts";
@@ -101,15 +101,13 @@ export function localArticleAssets(): Plugin {
             const parts = url.pathname.slice(ASSET_API.length + 1).split("/").map(decodeURIComponent);
             const sectionId = safeSectionId(parts[0]);
             const fileName = parts[1];
-            const match = STORED_IMAGE_FILE_PATTERN.exec(fileName ?? "");
-            if (!match || parts.length !== 2) throw new Error("图片路径不合法");
-            const extension = match[2];
-            const mime = imageMimeForExtension(extension);
+            if (!fileName || parts.length !== 2 || !STORED_IMAGE_FILE_PATTERN.test(fileName)) throw new Error("图片路径不合法");
+            const mime = imageMimeForStoredFile(fileName);
             const buffer = await readFile(join(contentRoot, sectionId, "assets", fileName));
             res.statusCode = 200;
             res.setHeader("content-type", mime);
             res.setHeader("content-length", buffer.length);
-            res.setHeader("cache-control", "public, max-age=31536000, immutable");
+            res.setHeader("cache-control", "no-store");
             res.setHeader("x-content-type-options", "nosniff");
             for (const [name, value] of Object.entries(imageResponseSecurityHeaders(fileName))) res.setHeader(name, value);
             res.end(buffer);

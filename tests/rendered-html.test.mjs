@@ -146,7 +146,9 @@ test("keeps navigation, rendering and local content storage in focused modules",
   assert.match(fileClient, /\/api\/local-articles/);
   assert.match(filePlugin, /writeFile/);
   assert.match(filePlugin, /"content", "local"/);
-  assert.match(filePlugin, /pruneUnusedAssets/);
+  assert.match(filePlugin, /deleteUnreferencedAssets/);
+  assert.match(filePlugin, /imageAssetReferenceCounts/);
+  assert.match(editor, /uploadedAssetUrls\.current\.add\(url\)/);
   assert.match(assetClient, /\/api\/local-assets/);
   assert.match(assetClient, /FileReader/);
   assert.match(assetPlugin, /writeFile/);
@@ -173,6 +175,10 @@ test("keeps navigation, rendering and local content storage in focused modules",
   assert.match(resizableImage, /const caption = alt\.trim\(\)/);
   assert.match(resizableImage, /closest<HTMLElement>\("\.markdown-image-frame"\)/);
   assert.match(resizableImage, /#width=/);
+  assert.match(resizableImage, /versionLocalArticleImageUrl/);
+  assert.match(resizableImage, /__MINELOG_LOCAL_MODE__/);
+  assert.match(assetClient, /local-asset-v=/);
+  assert.match(assetPlugin, /"cache-control", "no-store"/);
   assert.match(editor, /handleEditorPaste/);
   assert.match(editor, /saveLocalArticleImage/);
   assert.match(editor, /updateImageWidth/);

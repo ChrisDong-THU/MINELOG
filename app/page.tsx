@@ -667,7 +667,7 @@ export default function Home() {
         ...nextArticle,
         sectionId: value.sectionId,
         markdown: value.markdown,
-      });
+      }, value.uploadedAssetUrls ?? []);
     } catch (error) {
       ping(error instanceof Error ? error.message : "\u4FDD\u5B58 Markdown \u6587\u4EF6\u5931\u8D25");
       return;

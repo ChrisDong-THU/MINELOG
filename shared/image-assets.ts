@@ -14,7 +14,38 @@ const IMAGE_EXTENSION_TYPES = Object.fromEntries(
 ) as Readonly<Record<string, string>>;
 
 export const STORED_IMAGE_FILE_PATTERN = /^[a-f0-9]{24}\.(png|jpg|gif|webp|avif|bmp|svg|ico)$/;
+
+const EXACT_STORED_IMAGE_URL_PATTERN = /^\/api\/local-assets\/([a-zA-Z0-9_-]{1,100})\/([a-f0-9]{24}\.(?:png|jpg|gif|webp|avif|bmp|svg|ico))(?:[?#][^\s)]*)?$/;
 export const SVG_CONTENT_SECURITY_POLICY = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox";
+const STORED_IMAGE_URL_PATTERN = /\/api\/local-assets\/([a-zA-Z0-9_-]{1,100})\/([a-f0-9]{24}\.(?:png|jpg|gif|webp|avif|bmp|svg|ico))(?:[?#][^\s)]*)?/g;
+
+export function storedImageAssetKey(sectionId: string, fileName: string) {
+  return `assets/${sectionId}/${fileName}`;
+}
+
+export function storedImageAssetParts(assetKey: string) {
+  const match = /^assets\/([a-zA-Z0-9_-]{1,100})\/([a-f0-9]{24}\.(?:png|jpg|gif|webp|avif|bmp|svg|ico))$/.exec(assetKey);
+  return match ? { sectionId: match[1], fileName: match[2] } : null;
+}
+
+export function imageAssetKeysFromMarkdown(markdown: string) {
+  const keys = new Set<string>();
+  for (const match of markdown.matchAll(STORED_IMAGE_URL_PATTERN)) keys.add(storedImageAssetKey(match[1], match[2]));
+  return [...keys];
+}
+
+export function imageAssetKeyFromUrl(url: string) {
+  const match = EXACT_STORED_IMAGE_URL_PATTERN.exec(url);
+  return match ? storedImageAssetKey(match[1], match[2]) : null;
+}
+
+export function imageAssetReferenceCounts(assetKeyGroups: Iterable<Iterable<string>>) {
+  const counts = new Map<string, number>();
+  for (const keys of assetKeyGroups) {
+    for (const key of new Set(keys)) counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}
 
 export function normalizeImageMime(value: string | null) {
   const mime = (value ?? "").split(";", 1)[0].trim().toLowerCase();
@@ -28,6 +59,11 @@ export function imageExtensionForMime(mime: string) {
 
 export function imageMimeForExtension(extension: string) {
   return IMAGE_EXTENSION_TYPES[extension] ?? "application/octet-stream";
+}
+
+export function imageMimeForStoredFile(fileName: string) {
+  if (!STORED_IMAGE_FILE_PATTERN.test(fileName)) throw new Error("图片文件名不合法");
+  return imageMimeForExtension(fileName.slice(fileName.lastIndexOf(".") + 1));
 }
 
 export function imageResponseSecurityHeaders(fileName: string): Record<string, string> {

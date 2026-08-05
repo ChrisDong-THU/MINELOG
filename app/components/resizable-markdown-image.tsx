@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, type ImgHTMLAttributes, type PointerEvent as ReactPointerEvent } from "react";
+import { versionLocalArticleImageUrl } from "../local-article-assets";
 
 const WIDTH_FRAGMENT = /#width=(\d{1,3})$/;
 
@@ -57,7 +58,7 @@ export function ResizableMarkdownImage({
 
   return <span className={frameClassName} style={frameStyle}>
     <span className="markdown-image-visual">
-      <img loading="lazy" src={presentation.cleanSrc} alt={alt} style={style} {...props} />
+      <img loading="lazy" src={__MINELOG_LOCAL_MODE__ ? versionLocalArticleImageUrl(presentation.cleanSrc) : presentation.cleanSrc} alt={alt} style={style} {...props} />
       {editable && <>
         <button
           type="button"

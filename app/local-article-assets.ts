@@ -2,6 +2,17 @@ const ASSET_ENDPOINT = "/api/local-assets";
 
 export type LocalImageSource = File | string;
 
+const LOCAL_ASSET_RENDER_VERSION = "2";
+
+export function versionLocalArticleImageUrl(source: string) {
+  if (!source.startsWith(`${ASSET_ENDPOINT}/`)) return source;
+  const fragmentIndex = source.indexOf("#");
+  const base = fragmentIndex === -1 ? source : source.slice(0, fragmentIndex);
+  const fragment = fragmentIndex === -1 ? "" : source.slice(fragmentIndex);
+  const separator = base.includes("?") ? "&" : "?";
+  return `${base}${separator}local-asset-v=${LOCAL_ASSET_RENDER_VERSION}${fragment}`;
+}
+
 function fileDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();

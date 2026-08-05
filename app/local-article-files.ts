@@ -41,11 +41,11 @@ export async function initializeLocalArticleFiles(articles: LocalArticleFile[]):
   return responseJson<ListResponse>(response);
 }
 
-export async function saveLocalArticleFile(article: LocalArticleFile) {
+export async function saveLocalArticleFile(article: LocalArticleFile, cleanupAssetUrls: string[] = []) {
   const response = await fetch(ENDPOINT, {
     method: "PUT",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ article }),
+    body: JSON.stringify({ article, cleanupAssetUrls }),
   });
   return responseJson<{ article: LocalArticleFile }>(response);
 }

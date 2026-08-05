@@ -1,5 +1,8 @@
 import {
   STORED_IMAGE_FILE_PATTERN,
+  imageAssetKeyFromUrl,
+  imageAssetKeysFromMarkdown,
+  imageAssetReferenceCounts,
   imageExtensionForMime,
   imageResponseSecurityHeaders,
   normalizeImageMime,
@@ -45,7 +48,7 @@ type Article = {
   updatedAt: string;
 };
 
-type ArticleIndexRecord = Omit<Article, "markdown"> & { objectKey: string };
+type ArticleIndexRecord = Omit<Article, "markdown"> & { objectKey: string; assetKeys?: string[] };
 type Section = { id: string; label: string; icon: string; enabled: boolean; hotbarSlot?: number; description: string };
 
 function json(status: number, value: unknown, headers?: HeadersInit) {
@@ -155,15 +158,41 @@ async function putArticle(bucket: R2BucketLike, article: Article) {
 }
 
 function publicMetadata(record: ArticleIndexRecord) {
-  const { objectKey, ...article } = record;
+  const { objectKey, assetKeys, ...article } = record;
   void objectKey;
+  void assetKeys;
   return article;
 }
 
 function indexRecord(article: Article, objectKey: string): ArticleIndexRecord {
   const { markdown, ...metadata } = article;
-  void markdown;
-  return { ...metadata, objectKey };
+  return { ...metadata, objectKey, assetKeys: imageAssetKeysFromMarkdown(markdown) };
+}
+
+function normalizeCleanupAssetKeys(value: unknown) {
+  if (value === undefined) return [] as string[];
+  if (!Array.isArray(value) || value.length > 500) throw new Error("待清理图片列表不合法");
+  return [...new Set(value.flatMap((url) => {
+    if (typeof url !== "string") return [];
+    const key = imageAssetKeyFromUrl(url);
+    return key ? [key] : [];
+  }))];
+}
+
+async function hydrateArticleAssetKeys(bucket: R2BucketLike, records: ArticleIndexRecord[]) {
+  return Promise.all(records.map(async (record) => {
+    if (Array.isArray(record.assetKeys)) return record;
+    const object = await bucket.get(record.objectKey);
+    if (!object) return { ...record, assetKeys: [] };
+    const stored = JSON.parse(await object.text()) as { markdown?: unknown };
+    return { ...record, assetKeys: imageAssetKeysFromMarkdown(typeof stored.markdown === "string" ? stored.markdown : "") };
+  }));
+}
+
+async function deleteUnreferencedR2Assets(bucket: R2BucketLike, candidates: Iterable<string>, records: ArticleIndexRecord[]) {
+  const counts = imageAssetReferenceCounts(records.map((record) => record.assetKeys ?? []));
+  const deletions = [...new Set(candidates)].filter((assetKey) => (counts.get(assetKey) ?? 0) === 0);
+  if (deletions.length) await bucket.delete(deletions);
 }
 
 function normalizeInitialArticles(values: unknown[]) {
@@ -214,26 +243,34 @@ async function handleArticles(request: Request, bucket: R2BucketLike, url: URL) 
   }
 
   if (request.method === "PUT") {
-    const payload = await requestJson(request, MAX_ARTICLE_REQUEST_BYTES) as { article?: unknown };
+    const payload = await requestJson(request, MAX_ARTICLE_REQUEST_BYTES) as { article?: unknown; cleanupAssetUrls?: unknown };
     const article = normalizeArticle(payload.article);
-    const records = await readArticleIndex(bucket);
+    const uploadedAssetKeys = normalizeCleanupAssetKeys(payload.cleanupAssetUrls);
+    const records = await hydrateArticleAssetKeys(bucket, await readArticleIndex(bucket));
+    const previous = records.find((item) => item.id === article.id);
     const duplicate = records.find((item) => item.sectionId === article.sectionId && item.title === article.title && item.id !== article.id);
     if (duplicate) return json(409, { error: "同一板块中已存在同名文章" });
     const objectKey = await putArticle(bucket, article);
-    const next = records.filter((item) => item.id !== article.id);
-    next.unshift(indexRecord(article, objectKey));
+    const current = indexRecord(article, objectKey);
+    const currentAssets = new Set(current.assetKeys ?? []);
+    const removedAssets = (previous?.assetKeys ?? []).filter((key) => !currentAssets.has(key));
+    const uploadedAssets = uploadedAssetKeys.filter((key) => !currentAssets.has(key));
+    const next = [current, ...records.filter((item) => item.id !== article.id)];
     await writeArticleIndex(bucket, next);
     await bucket.put(INITIALIZED_KEY, JSON.stringify({ initializedAt: new Date().toISOString() }), { httpMetadata: { contentType: "application/json" } });
+    await deleteUnreferencedR2Assets(bucket, [...removedAssets, ...uploadedAssets], next);
     return json(200, { article });
   }
   if (request.method === "DELETE") {
     const payload = await requestJson(request, 32 * 1024) as { sectionId?: unknown; id?: unknown };
     const sectionId = safeSectionId(payload.sectionId);
     const articleId = payload.id === undefined ? undefined : safeArticleId(payload.id);
-    const records = await readArticleIndex(bucket);
+    const records = await hydrateArticleAssetKeys(bucket, await readArticleIndex(bucket));
     const removed = records.filter((item) => item.sectionId === sectionId && (articleId === undefined || item.id === articleId));
+    const remaining = records.filter((item) => !removed.includes(item));
     if (removed.length) await bucket.delete(removed.map((item) => item.objectKey));
-    await writeArticleIndex(bucket, records.filter((item) => !removed.includes(item)));
+    await writeArticleIndex(bucket, remaining);
+    await deleteUnreferencedR2Assets(bucket, removed.flatMap((item) => item.assetKeys ?? []), remaining);
     return json(200, { deleted: removed.length });
   }
 

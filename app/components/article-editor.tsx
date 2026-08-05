@@ -15,6 +15,7 @@ export type ArticleEditorValue = {
   summary: string;
   tags: string[];
   markdown: string;
+  uploadedAssetUrls?: string[];
 };
 
 type EditorSection = Pick<Section, "id" | "label" | "icon">;
@@ -60,6 +61,7 @@ export function ArticleEditor({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const insertUrlRef = useRef<HTMLInputElement>(null);
   const markdownRef = useRef(markdown);
+  const uploadedAssetUrls = useRef(new Set<string>());
   const selectionRef = useRef<EditorSelection>({ start: 0, end: 0 });
   const dialogSelectionRef = useRef<EditorSelection>({ start: 0, end: 0 });
   const historyRef = useRef<{
@@ -309,6 +311,7 @@ export function ArticleEditor({
       const markdownImages: string[] = [];
       for (const [index, source] of sources.entries()) {
         const url = await saveLocalArticleImage(sectionId, source);
+        uploadedAssetUrls.current.add(url);
         const rawLabel = source instanceof File ? source.name.replace(/\.[^.]+$/, "") : `图片 ${index + 1}`;
         const label = (rawLabel || "图片").replace(/\]/g, "\\]");
         markdownImages.push(`![${label}](${url})`);
@@ -350,6 +353,7 @@ export function ArticleEditor({
         summary: summary.trim(),
         tags: tags.split(/[，,]/).map((tag) => tag.trim()).filter(Boolean),
         markdown: markdownRef.current,
+        uploadedAssetUrls: [...uploadedAssetUrls.current],
       });
     } finally {
       setSavingArticle(false);

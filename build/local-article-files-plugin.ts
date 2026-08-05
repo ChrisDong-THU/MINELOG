@@ -2,6 +2,12 @@ import { access, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname, join, resolve } from "node:path";
 import type { Plugin } from "vite";
+import {
+  imageAssetKeyFromUrl,
+  imageAssetKeysFromMarkdown,
+  imageAssetReferenceCounts,
+  storedImageAssetParts,
+} from "../shared/image-assets.ts";
 
 const API_PATH = "/api/local-articles";
 const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
@@ -165,38 +171,28 @@ async function readAll(root: string): Promise<ArticleFileRecord[]> {
   return records.filter((record): record is ArticleFileRecord => Boolean(record)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-function referencedAssets(records: ArticleFileRecord[]) {
-  const references = new Set<string>();
-  for (const record of records) {
-    for (const match of record.markdown.matchAll(/\/api\/local-assets\/([a-zA-Z0-9_-]{1,100})\/([a-f0-9]{24}\.(?:png|jpg|gif|webp|avif|bmp|svg|ico))/g)) {
-      references.add(join(match[1], match[2]));
-    }
-  }
-  return references;
+function normalizeCleanupAssetKeys(value: unknown) {
+  if (value === undefined) return [] as string[];
+  if (!Array.isArray(value) || value.length > 500) throw new Error("待清理图片列表不合法");
+  return [...new Set(value.flatMap((url) => {
+    if (typeof url !== "string") return [];
+    const key = imageAssetKeyFromUrl(url);
+    return key ? [key] : [];
+  }))];
 }
 
-async function pruneUnusedAssets(root: string) {
-  const references = referencedAssets(await readAll(root));
-  let sections;
-  try {
-    sections = await readdir(root, { withFileTypes: true });
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
-    throw error;
-  }
-  await Promise.all(sections.filter((entry) => entry.isDirectory()).map(async (section) => {
-    const assetsDirectory = join(root, section.name, "assets");
-    let assets;
-    try {
-      assets = await readdir(assetsDirectory, { withFileTypes: true });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
-      throw error;
-    }
-    await Promise.all(assets.filter((entry) => entry.isFile()).map(async (asset) => {
-      if (!references.has(join(section.name, asset.name))) await rm(join(assetsDirectory, asset.name), { force: true });
-    }));
-  }));
+function recordAssetKeys(record: Pick<ArticleFileRecord, "markdown">) {
+  return imageAssetKeysFromMarkdown(record.markdown);
+}
+
+async function deleteUnreferencedAssets(root: string, candidates: Iterable<string>, records: ArticleFileRecord[]) {
+  const counts = imageAssetReferenceCounts(records.map(recordAssetKeys));
+  const deletions = [...new Set(candidates)].flatMap((assetKey) => {
+    if ((counts.get(assetKey) ?? 0) > 0) return [];
+    const parts = storedImageAssetParts(assetKey);
+    return parts ? [rm(join(root, parts.sectionId, "assets", parts.fileName), { force: true })] : [];
+  });
+  await Promise.all(deletions);
 }
 
 async function initialized(markerPath: string) {
@@ -209,8 +205,9 @@ async function initialized(markerPath: string) {
   }
 }
 
-async function saveOne(root: string, value: unknown, pruneAssets = true) {
+async function saveOne(root: string, value: unknown, cleanupAssetUrls: unknown = []) {
   const article = normalizeArticle(value);
+  const uploadedAssetKeys = normalizeCleanupAssetKeys(cleanupAssetUrls);
   const existing = await readAll(root);
   const previousRecord = existing.find((record) => record.id === article.id);
   const duplicate = existing.find((record) => record.sectionId === article.sectionId && record.title === article.title && record.id !== article.id);
@@ -228,7 +225,13 @@ async function saveOne(root: string, value: unknown, pruneAssets = true) {
     await rename(temporary, destination);
   }
   if (previousRecord && previousRecord.filePath !== destination) await rm(previousRecord.filePath, { force: true });
-  if (pruneAssets) await pruneUnusedAssets(root);
+
+  const nextRecord: ArticleFileRecord = { ...article, filePath: destination };
+  const nextRecords = [...existing.filter((record) => record.id !== article.id), nextRecord];
+  const currentAssets = new Set(recordAssetKeys(nextRecord));
+  const removedAssets = previousRecord ? recordAssetKeys(previousRecord).filter((key) => !currentAssets.has(key)) : [];
+  const uploadedAssets = uploadedAssetKeys.filter((key) => !currentAssets.has(key));
+  await deleteUnreferencedAssets(root, [...removedAssets, ...uploadedAssets], nextRecords);
   return article;
 }
 
@@ -251,8 +254,7 @@ async function initializeStore(root: string, markerPath: string, values: unknown
   if (!Array.isArray(values) || values.length > 2000) throw new Error("初始化文章列表不合法");
   const articles = normalizeInitialArticles(values);
   await mkdir(root, { recursive: true });
-  for (const article of articles) await saveOne(root, article, false);
-  await pruneUnusedAssets(root);
+  for (const article of articles) await saveOne(root, article);
   await writeFile(markerPath, JSON.stringify({ version: 2, initializedAt: new Date().toISOString() }, null, 2), "utf8");
   return readAll(root);
 }
@@ -292,17 +294,20 @@ export function localArticleFiles(): Plugin {
             return json(res, 200, { available: true, initialized: true, articles: publicArticles(articles) });
           }
           if (req.method === "PUT") {
-            const payload = await bodyJson(req) as { article?: unknown };
-            const article = await saveOne(root, payload.article);
+            const payload = await bodyJson(req) as { article?: unknown; cleanupAssetUrls?: unknown };
+            const article = await saveOne(root, payload.article, payload.cleanupAssetUrls);
             return json(res, 200, { article });
           }
           if (req.method === "DELETE") {
             const payload = await bodyJson(req) as { sectionId?: unknown; id?: unknown };
             const sectionId = safeSectionId(payload.sectionId);
             const articleId = payload.id === undefined ? undefined : safeArticleId(payload.id);
-            const matches = (await readAll(root)).filter((record) => record.sectionId === sectionId && (articleId === undefined || record.id === articleId));
+            const records = await readAll(root);
+            const matches = records.filter((record) => record.sectionId === sectionId && (articleId === undefined || record.id === articleId));
+            const remaining = records.filter((record) => !matches.includes(record));
+            const cleanupCandidates = matches.flatMap(recordAssetKeys);
             await Promise.all(matches.map((record) => rm(record.filePath, { force: true })));
-            await pruneUnusedAssets(root);
+            await deleteUnreferencedAssets(root, cleanupCandidates, remaining);
             return json(res, 200, { deleted: matches.length });
           }
           res.setHeader("allow", "GET, POST, PUT, DELETE");
