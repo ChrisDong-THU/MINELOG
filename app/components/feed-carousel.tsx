@@ -97,7 +97,7 @@ export function FeedCarousel({
     <div className="feed-track">{renderedEntries.map((entry, index) =>
       <button
         className="post-entry"
-        key={`${entry[4] ?? entry[0]}:${entry[1]}:${index}`}
+        key={`${entry[5] ?? `${entry[4] ?? entry[0]}:${entry[1]}`}:${index}`}
         aria-hidden={rotating && index >= visibleEntries.length ? true : undefined}
         tabIndex={rotating && index >= visibleEntries.length ? -1 : 0}
         onClick={() => onOpen(entry)}

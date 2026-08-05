@@ -1,6 +1,11 @@
 "use client";
 
-import { useId, type ReactNode } from "react";
+import { useId, useSyncExternalStore, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+
+const subscribeToHydration = () => () => {};
+const hydratedSnapshot = () => true;
+const serverSnapshot = () => false;
 
 type GameIconButtonProps = {
   icon: string;
@@ -28,8 +33,11 @@ type GameModalProps = {
 
 export function GameModal({ eyebrow, title, description, icon, onClose, children, footer, className = "" }: GameModalProps) {
   const titleId = useId();
+  const portalReady = useSyncExternalStore(subscribeToHydration, hydratedSnapshot, serverSnapshot);
 
-  return <div className="modal-backdrop" onMouseDown={onClose}>
+  if (!portalReady) return null;
+
+  return createPortal(<div className="modal-backdrop" onMouseDown={onClose}>
     <section className={["game-modal", className].filter(Boolean).join(" ")} role="dialog" aria-modal="true" aria-labelledby={titleId} onMouseDown={(event) => event.stopPropagation()}>
       <header className={`game-modal__header${icon ? "" : " game-modal__header--no-icon"}`}>
         {icon && <span className="game-modal__icon"><img src={icon} alt="" draggable={false} /></span>}
@@ -43,5 +51,5 @@ export function GameModal({ eyebrow, title, description, icon, onClose, children
       <div className="game-modal__body">{children}</div>
       {footer && <footer className="game-modal__footer">{footer}</footer>}
     </section>
-  </div>;
+  </div>, document.body);
 }

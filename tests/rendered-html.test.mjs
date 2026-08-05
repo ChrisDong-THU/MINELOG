@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 
 const root = new URL("../", import.meta.url);
@@ -32,7 +32,7 @@ test("server renders the MINELOG application shell", async () => {
 });
 
 test("keeps navigation, rendering and local content storage in focused modules", async () => {
-  const [page, navigation, storage, renderer, resizableImage, searchPage, layout, fileClient, filePlugin, assetClient, assetPlugin, editor, toolbar, articleReader, contentModel, hotbarModel, gitignore, minecraftIcons, sectionEditor, imageAssets] = await Promise.all([
+  const [page, navigation, storage, renderer, resizableImage, searchPage, layout, fileClient, filePlugin, assetClient, assetPlugin, editor, toolbar, articleReader, contentModel, hotbarModel, gitignore, minecraftIcons, sectionEditor, imageAssets, gameModal] = await Promise.all([
     source("app/page.tsx"),
     source("app/navigation.ts"),
     source("app/browser-storage.ts"),
@@ -53,8 +53,10 @@ test("keeps navigation, rendering and local content storage in focused modules",
     source("app/minecraft-icons.ts"),
     source("app/components/section-editor-modal.tsx"),
     source("shared/image-assets.ts"),
+    source("app/components/game-modal.tsx"),
   ]);
   const editorBase = await source("app/editor-base.css");
+  const globalStyles = await source("app/globals.css");
   const sectionPage = await source("app/components/section-page.tsx");
   const feedCarousel = await source("app/components/feed-carousel.tsx");
 
@@ -113,6 +115,12 @@ test("keeps navigation, rendering and local content storage in focused modules",
   assert.doesNotMatch(sectionPage, /article-index-icon/);
   assert.doesNotMatch(sectionPage, /minecraft\/items\/arrow\.png/);
   assert.match(sectionPage, /article-open-icon/);
+  assert.match(globalStyles, /--article-copy-shift-x: 4px/);
+  assert.match(globalStyles, /--article-copy-shift-y: 3px/);
+  assert.match(globalStyles, /\.article-card h3[^}]*transform: translate\(var\(--article-copy-shift-x\),var\(--article-copy-shift-y\)\)/s);
+  assert.match(globalStyles, /\.article-card > p[^}]*transform: translate\(var\(--article-copy-shift-x\),var\(--article-copy-shift-y\)\)/s);
+  assert.match(globalStyles, /\.article-card:hover \.article-tags b,\s*\.article-card:focus-visible \.article-tags b/);
+  assert.match(globalStyles, /\.article-card:hover \.article-tags b[^}]*color: #bddb84/s);
   assert.match(sectionPage, /index === 0 \? " article-card--featured"/);
   assert.match(layout, /MINELOG/);
   const uiIconBlock = minecraftIcons.slice(
@@ -147,6 +155,18 @@ test("keeps navigation, rendering and local content storage in focused modules",
   assert.match(assetPlugin, /from "\.\.\/shared\/image-assets\.ts"/);
   assert.match(imageAssets, /"image\/svg\+xml": "svg"/);
   assert.match(renderer, /ResizableMarkdownImage/);
+  assert.match(gameModal, /createPortal/);
+  assert.match(gameModal, /document\.body/);
+  assert.match(editor, /onDirtyChange\?\.\(isDirty\)/);
+  assert.match(editor, /window\.addEventListener\("keydown", handleSaveShortcut\)/);
+  assert.match(editor, /\(event\.ctrlKey \|\| event\.metaKey\)/);
+  assert.doesNotMatch(editor, /if \(key === "s"/);
+  assert.match(editor, /markdown !== \(initialValue\.markdown \|\| STARTER_MARKDOWN\)/);
+  assert.match(page, /requestEditorExit\(\(\) => runPageTransition/);
+  assert.match(page, /window\.addEventListener\("beforeunload", preventUnload\)/);
+  assert.match(page, /requestEditorExit\(\(\) => window\.history\.back\(\)\)/);
+  assert.match(page, /UNSAVED CHANGES/);
+  assert.match(page, /放弃未保存的更改？/);
   assert.match(renderer, /editableImages/);
   assert.match(resizableImage, /markdown-image-resize-handle/);
   assert.match(resizableImage, /markdown-image-caption/);
@@ -173,7 +193,11 @@ test("keeps navigation, rendering and local content storage in focused modules",
   assert.match(contentModel, /EMPTY_CONTENT_STATE/);
   assert.match(contentModel, /createSearchDocuments/);
   assert.match(contentModel, /export function articleMarkdownKey/);
-  assert.match(page, /articleMarkdownKey\(target\.sectionId, target\.title\)/);
+  assert.match(page, /articleMarkdownKey\(target\.id\)/);
+  assert.match(page, /window\.crypto\.randomUUID\(\)/);
+  assert.match(contentModel, /latestById/);
+  assert.match(filePlugin, /`\$\{article\.id\}\.md`/);
+  assert.match(filePlugin, /record\.id !== article\.id/);
   assert.match(editor, /savingArticle/);
   assert.match(editor, /\\u6B63\\u5728\\u4FDD\\u5B58\\u6587\\u7AE0\\u6B63\\u6587\\u2026/);
   assert.doesNotMatch(page, /\$\{(?:sectionId|target\.sectionId)\}::/);
@@ -184,6 +208,22 @@ test("keeps navigation, rendering and local content storage in focused modules",
   assert.match(gitignore, /\/content\/local\//);
 });
 
+
+test("routes every dialog through the shared viewport portal", async () => {
+  const componentDirectory = new URL("../app/components/", import.meta.url);
+  const componentFiles = (await readdir(componentDirectory)).filter((name) => name.endsWith(".tsx")).sort();
+  const componentSources = await Promise.all(componentFiles.map(async (name) => [name, await source("app/components/" + name)]));
+
+  const dialogOwners = componentSources
+    .filter(([, contents]) => contents.includes('role="dialog"') || contents.includes("modal-backdrop"))
+    .map(([name]) => name);
+  assert.deepEqual(dialogOwners, ["game-modal.tsx"]);
+
+  for (const name of ["article-editor.tsx", "editor-access-modal.tsx", "section-editor-modal.tsx"]) {
+    const contents = componentSources.find(([fileName]) => fileName === name)?.[1] ?? "";
+    assert.ok(contents.includes('import { GameModal } from "./game-modal";'));
+  }
+});
 
 test("separates local persistence and remote device trust", async () => {
   const [page, styles, viteConfig, localAuth, localSections, remoteSections, sharedAuth, r2Content] = await Promise.all([

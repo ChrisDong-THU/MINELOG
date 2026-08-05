@@ -5,7 +5,6 @@ const ENDPOINT = "/api/local-articles";
 export type LocalArticleFile = SectionArticle & {
   sectionId: string;
   markdown?: string;
-  updatedAt?: string;
 };
 
 type ListResponse = {
@@ -27,8 +26,8 @@ export async function listLocalArticleFiles(): Promise<ListResponse> {
   return responseJson<ListResponse>(response);
 }
 
-export async function loadLocalArticleFile(sectionId: string, title: string) {
-  const params = new URLSearchParams({ sectionId, title });
+export async function loadLocalArticleFile(articleId: string) {
+  const params = new URLSearchParams({ id: articleId });
   const response = await fetch(`${ENDPOINT}?${params}`, { cache: "no-store" });
   return responseJson<{ article: LocalArticleFile }>(response);
 }
@@ -42,20 +41,20 @@ export async function initializeLocalArticleFiles(articles: LocalArticleFile[]):
   return responseJson<ListResponse>(response);
 }
 
-export async function saveLocalArticleFile(article: LocalArticleFile, previous?: { sectionId: string; title: string }) {
+export async function saveLocalArticleFile(article: LocalArticleFile) {
   const response = await fetch(ENDPOINT, {
     method: "PUT",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ article, previous }),
+    body: JSON.stringify({ article }),
   });
   return responseJson<{ article: LocalArticleFile }>(response);
 }
 
-export async function deleteLocalArticleFile(sectionId: string, title?: string) {
+export async function deleteLocalArticleFile(sectionId: string, articleId?: string) {
   const response = await fetch(ENDPOINT, {
     method: "DELETE",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ sectionId, title }),
+    body: JSON.stringify({ sectionId, id: articleId }),
   });
   return responseJson<{ deleted: number }>(response);
 }

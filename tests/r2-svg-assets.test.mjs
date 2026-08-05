@@ -73,6 +73,74 @@ test("R2 accepts and safely serves SVG article images", async () => {
   assert.equal(await download.text(), svg);
 });
 
+test("R2 uses permanent UUID article identity and rejects same-section duplicate titles", async () => {
+  const bucket = new MemoryBucket();
+  const firstId = "11111111-1111-4111-8111-111111111111";
+  const secondId = "22222222-2222-4222-8222-222222222222";
+  const article = {
+    id: firstId,
+    sectionId: "notes",
+    title: "永久身份",
+    summary: "初始版本",
+    date: "08.06",
+    read: "1 MIN",
+    tags: [],
+    markdown: "body",
+    updatedAt: "2026-08-06T08:00:00.000Z",
+  };
+
+  const created = await handleR2ContentRequest(new Request("https://minelog.example/api/local-articles", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ article }),
+  }), bucket);
+  assert.equal(created?.status, 200);
+  assert.ok(bucket.objects.has(`articles/${firstId}.json`));
+
+  const duplicate = await handleR2ContentRequest(new Request("https://minelog.example/api/local-articles", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ article: { ...article, id: secondId } }),
+  }), bucket);
+  assert.equal(duplicate?.status, 409);
+
+  const renamed = await handleR2ContentRequest(new Request("https://minelog.example/api/local-articles", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ article: { ...article, title: "重命名后", markdown: "renamed body" } }),
+  }), bucket);
+  assert.equal(renamed?.status, 200);
+  assert.ok(bucket.objects.has(`articles/${firstId}.json`));
+
+  const loaded = await handleR2ContentRequest(new Request(`https://minelog.example/api/local-articles?id=${firstId}`), bucket);
+  assert.equal(loaded?.status, 200);
+  const loadedBody = await loaded.json();
+  assert.equal(loadedBody.article.id, firstId);
+  assert.equal(loadedBody.article.title, "重命名后");
+});
+test("R2 validates the complete initial article set before writing objects", async () => {
+  const bucket = new MemoryBucket();
+  const baseArticle = {
+    id: "11111111-1111-4111-8111-111111111111",
+    sectionId: "notes",
+    title: "初始化文章",
+    summary: "测试初始化原子性",
+    date: "08.06",
+    read: "1 MIN",
+    tags: [],
+    markdown: "body",
+    updatedAt: "2026-08-06T08:00:00.000Z",
+  };
+  const response = await handleR2ContentRequest(new Request("https://minelog.example/api/local-articles", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ articles: [baseArticle, { ...baseArticle, title: "重复 UUID" }] }),
+  }), bucket);
+
+  assert.equal(response?.status, 400);
+  assert.equal(bucket.objects.size, 0);
+});
+
 test("rendered article images have no default border", async () => {
   const css = await readFile(new URL("../app/reader.css", import.meta.url), "utf8");
   assert.match(css, /\.markdown-body img \{[^}]*border: 0;/s);

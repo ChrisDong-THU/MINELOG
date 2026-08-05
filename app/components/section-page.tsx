@@ -26,11 +26,11 @@ export function SectionPage({
 }: {
   section: Section;
   articles: SectionArticle[];
-  onOpen: (title: string) => void;
+  onOpen: (articleId: string) => void;
 }) {
   const [sortMode, setSortMode] = useState<"newest" | "alphabetical">("newest");
   const sortedArticles = useMemo(() => [...articles].sort((a, b) =>
-    sortMode === "newest" ? b.date.localeCompare(a.date) : a.title.localeCompare(b.title, "zh-CN", { sensitivity: "base" })
+    sortMode === "newest" ? (b.updatedAt ?? b.date).localeCompare(a.updatedAt ?? a.date) : a.title.localeCompare(b.title, "zh-CN", { sensitivity: "base" })
   ), [articles, sortMode]);
 
   return <div className="section-page">
@@ -55,7 +55,7 @@ export function SectionPage({
         </div>
       </div>
       <div className="article-grid">{sortedArticles.map((article, index) =>
-        <button className={`article-card${index === 0 ? " article-card--featured" : ""}`} key={article.title} onClick={() => onOpen(article.title)}>
+        <button className={`article-card${index === 0 ? " article-card--featured" : ""}`} key={article.id} onClick={() => onOpen(article.id)}>
           <h3>{article.title}</h3>
           <p>{article.summary}</p>
           <span className="article-footer">

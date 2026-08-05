@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type WheelEvent } from "react";
 import { flushSync } from "react-dom";
-import { GameIconButton } from "./components/game-modal";
+import { GameIconButton, GameModal } from "./components/game-modal";
 import { ArticleReader } from "./components/article-reader";
 import { ArticleEditor, type ArticleEditorValue } from "./components/article-editor";
 import { SectionEditorModal } from "./components/section-editor-modal";
@@ -35,7 +35,8 @@ import { assignSectionToHotbarSlot, resolveHotbarSections } from "./hotbar-model
 import type { ContentState, FeedEntry, SearchDocument, Section, SectionArticle } from "./content-types";
 import { MINECRAFT_UI_ICONS, normalizeSectionIcons } from "./minecraft-icons";
 
-type EditorState = { mode: "new" | "edit"; sectionId: string; title?: string };
+type EditorState = { mode: "new" | "edit"; sectionId: string; articleId: string };
+type EditorRequest = { mode: "new"; sectionId: string } | { mode: "edit"; sectionId: string; articleId: string };
 type SectionDialogState = { mode: "new" | "edit" };
 const KEY = "minelog-toolbar-v1";
 const CONTENT_KEY = "minelog-content-v1";
@@ -94,11 +95,13 @@ export default function Home() {
   const [dragOverSlot, setDragOverSlot] = useState<number | null>(null);
   const [sectionDialog, setSectionDialog] = useState<SectionDialogState | null>(null);
   const [notice, setNotice] = useState("");
-  const [reading, setReading] = useState<{ sectionId: string; title: string } | null>(null);
+  const [reading, setReading] = useState<{ sectionId: string; articleId: string } | null>(null);
   const [editing, setEditing] = useState<EditorState | null>(null);
   const [editorAuthorized, setEditorAuthorized] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  const [editorDirty, setEditorDirty] = useState(false);
+  const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
   const [hudAwake, setHudAwake] = useState(true);
   const navigating = useRef(false);
   const dragOriginRef = useRef<"hotbar" | "more" | null>(null);
@@ -108,6 +111,9 @@ export default function Home() {
   const wheelSwitchAt = useRef(0);
   const editorAuthorizedRef = useRef(false);
   const pendingEditorAction = useRef<(() => void) | null>(null);
+  const pendingEditorExit = useRef<(() => void) | null>(null);
+  const editorDirtyRef = useRef(false);
+  const editingRef = useRef<EditorState | null>(null);
   const remoteSectionsAvailable = useRef(false);
   const remoteSectionsSaveTimer = useRef<number | null>(null);
   const markdownRequests = useRef(new Set<string>());
@@ -128,6 +134,48 @@ export default function Home() {
       .finally(() => { if (!disposed) setAuthReady(true); });
     return () => { disposed = true; };
   }, []);
+  const handleEditorDirtyChange = useCallback((dirty: boolean) => {
+    editorDirtyRef.current = dirty;
+    setEditorDirty(dirty);
+  }, []);
+
+  const requestEditorExit = useCallback((action: () => void) => {
+    if (!editingRef.current || !editorDirtyRef.current) {
+      action();
+      return;
+    }
+    pendingEditorExit.current = action;
+    setDiscardDialogOpen(true);
+  }, []);
+
+  const continueEditing = useCallback(() => {
+    pendingEditorExit.current = null;
+    setDiscardDialogOpen(false);
+  }, []);
+
+  const discardEditorChanges = useCallback(() => {
+    const action = pendingEditorExit.current;
+    pendingEditorExit.current = null;
+    editorDirtyRef.current = false;
+    setEditorDirty(false);
+    setDiscardDialogOpen(false);
+    action?.();
+  }, []);
+
+  useEffect(() => {
+    editingRef.current = editing;
+  }, [editing]);
+
+  useEffect(() => {
+    if (!editorDirty) return undefined;
+    const preventUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", preventUnload);
+    return () => window.removeEventListener("beforeunload", preventUnload);
+  }, [editorDirty]);
+
   const sectionsRef = useRef(sections);
   const articlesRef = useRef(articlesBySection);
   useEffect(() => {
@@ -225,9 +273,9 @@ export default function Home() {
       let route = readAppRoute();
       const routeSectionId = "sectionId" in route ? route.sectionId : undefined;
       const sectionExists = routeSectionId ? sectionsRef.current.some((section) => section.id === routeSectionId) : true;
-      const routeArticleTitle = route.view === "reader" || (route.view === "editor" && route.mode === "edit") ? route.title : undefined;
-      const articleExists = routeArticleTitle
-        ? Boolean(routeSectionId && articlesRef.current[routeSectionId]?.some((article) => article.title === routeArticleTitle))
+      const routeArticleId = route.view === "reader" || (route.view === "editor" && route.mode === "edit") ? route.articleId : undefined;
+      const articleExists = routeArticleId
+        ? Boolean(routeSectionId && articlesRef.current[routeSectionId]?.some((article) => article.id === routeArticleId))
         : true;
 
       if (!sectionExists) {
@@ -239,8 +287,8 @@ export default function Home() {
       }
       if (route.view === "editor" && !editorAuthorizedRef.current) {
         const intendedRoute = route;
-        route = route.mode === "edit" && route.title
-          ? { view: "reader", sectionId: route.sectionId, title: route.title }
+        route = route.mode === "edit"
+          ? { view: "reader", sectionId: route.sectionId, articleId: route.articleId }
           : { view: "section", sectionId: route.sectionId };
         writeAppRoute(route, "replace");
         pendingEditorAction.current = () => {
@@ -260,11 +308,11 @@ export default function Home() {
       } else if (route.view === "section") {
         setActive(route.sectionId); setReading(null); setEditing(null); setHudAwake(true);
       } else if (route.view === "reader") {
-        setActive(route.sectionId); setReading({ sectionId: route.sectionId, title: route.title }); setEditing(null); setHudAwake(false);
+        setActive(route.sectionId); setReading({ sectionId: route.sectionId, articleId: route.articleId }); setEditing(null); setHudAwake(false);
       } else {
         setActive(route.sectionId);
-        setReading(route.mode === "edit" && route.title ? { sectionId: route.sectionId, title: route.title } : null);
-        setEditing({ mode: route.mode, sectionId: route.sectionId, title: route.title });
+        setReading(route.mode === "edit" ? { sectionId: route.sectionId, articleId: route.articleId } : null);
+        setEditing({ mode: route.mode, sectionId: route.sectionId, articleId: route.mode === "edit" ? route.articleId : window.crypto.randomUUID() });
         setHudAwake(false);
       }
 
@@ -275,10 +323,22 @@ export default function Home() {
 
     const current = window.history.state && typeof window.history.state === "object" ? window.history.state : {};
     window.history.replaceState({ ...current, minelog: true, minelogDepth: Number(current.minelogDepth ?? 0) }, "", window.location.href);
+    const handlePopState = () => {
+      const currentEditing = editingRef.current;
+      if (!currentEditing || !editorDirtyRef.current) {
+        applyRoute();
+        return;
+      }
+      writeAppRoute(currentEditing.mode === "edit"
+        ? { view: "editor", sectionId: currentEditing.sectionId, mode: "edit", articleId: currentEditing.articleId }
+        : { view: "editor", sectionId: currentEditing.sectionId, mode: "new" });
+      requestEditorExit(() => window.history.back());
+    };
+
     applyRoute();
-    window.addEventListener("popstate", applyRoute);
-    return () => window.removeEventListener("popstate", applyRoute);
-  }, [hydrated, contentReady, authReady, sectionsRemoteReady]);
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [hydrated, contentReady, authReady, sectionsRemoteReady, requestEditorExit]);
   const immersive = Boolean(reading || editing);
   useEffect(() => () => {
     if (hudTimer.current !== null) window.clearTimeout(hudTimer.current);
@@ -300,31 +360,32 @@ export default function Home() {
   );
   const activeSection = sectionById.get(active);
   const readingSection = reading ? sectionById.get(reading.sectionId) : undefined;
-  const readingArticle = reading ? articlesBySection[reading.sectionId]?.find((article) => article.title === reading.title) : undefined;
-  const editingArticle = editing?.mode === "edit" ? articlesBySection[editing.sectionId]?.find((article) => article.title === editing.title) : undefined;
-  const articleMarkdown = (sectionId: string, article: SectionArticle) => markdownForArticle(markdownOverrides, sectionId, article);
-  const hasMarkdown = useCallback((sectionId: string, title: string) => Object.prototype.hasOwnProperty.call(markdownOverrides, articleMarkdownKey(sectionId, title)), [markdownOverrides]);
-  const readingMarkdownReady = Boolean(reading && readingArticle && hasMarkdown(reading.sectionId, readingArticle.title));
-  const editingMarkdownReady = editing?.mode !== "edit" || Boolean(editingArticle && hasMarkdown(editing.sectionId, editingArticle.title));
+  const readingArticle = reading ? articlesBySection[reading.sectionId]?.find((article) => article.id === reading.articleId) : undefined;
+  const editingArticle = editing?.mode === "edit" ? articlesBySection[editing.sectionId]?.find((article) => article.id === editing.articleId) : undefined;
+  const articleMarkdown = (article: SectionArticle) => markdownForArticle(markdownOverrides, article);
+  const hasMarkdown = useCallback((articleId: string) => Object.prototype.hasOwnProperty.call(markdownOverrides, articleMarkdownKey(articleId)), [markdownOverrides]);
+  const readingMarkdownReady = Boolean(reading && readingArticle && hasMarkdown(readingArticle.id));
+  const editingMarkdownReady = editing?.mode !== "edit" || Boolean(editingArticle && hasMarkdown(editingArticle.id));
   const editorInitialValue = editing && editingMarkdownReady ? {
+    id: editing.articleId,
     sectionId: editing.sectionId,
     title: editingArticle?.title ?? "",
     summary: editingArticle?.summary ?? "",
     tags: editingArticle?.tags ?? [],
-    markdown: editingArticle ? articleMarkdown(editing.sectionId, editingArticle) : "",
+    markdown: editingArticle ? articleMarkdown(editingArticle) : "",
   } : undefined;
 
   useEffect(() => {
     const target = editing?.mode === "edit" && editingArticle
-      ? { sectionId: editing.sectionId, title: editingArticle.title }
+      ? editingArticle
       : reading && readingArticle
-        ? { sectionId: reading.sectionId, title: readingArticle.title }
+        ? readingArticle
         : undefined;
-    if (!target || hasMarkdown(target.sectionId, target.title)) return;
-    const key = articleMarkdownKey(target.sectionId, target.title);
+    if (!target || hasMarkdown(target.id)) return;
+    const key = articleMarkdownKey(target.id);
     if (markdownRequests.current.has(key)) return;
     markdownRequests.current.add(key);
-    void loadLocalArticleFile(target.sectionId, target.title)
+    void loadLocalArticleFile(target.id)
       .then(({ article }) => {
         if (typeof article.markdown !== "string") return;
         setContent((current) => ({
@@ -388,7 +449,7 @@ export default function Home() {
     setSections((current) => current.filter((section) => section.id !== id));
     setContent((current) => ({
       articles: Object.fromEntries(Object.entries(current.articles).filter(([sectionId]) => sectionId !== id)) as Record<string, SectionArticle[]>,
-      markdown: Object.fromEntries(Object.entries(current.markdown).filter(([key]) => !key.startsWith(`${id}:`))),
+      markdown: Object.fromEntries(Object.entries(current.markdown).filter(([key]) => !(current.articles[id] ?? []).some((article) => article.id === key))),
     }));
     if (active === id) { setActive("more"); writeAppRoute({ view: "more" }, "replace"); }
     setReading(null);
@@ -479,7 +540,7 @@ export default function Home() {
       flushSync(() => { setActive("search"); setSearchQuery(""); setReading(null); setEditing(null); setHudAwake(true); });
       document.querySelector<HTMLElement>(".content-viewport")?.scrollTo({ top: 0 });
     };
-    runPageTransition(navigating, update);
+    requestEditorExit(() => runPageTransition(navigating, update));
   };
 
   const updateSearchQuery = (query: string) => {
@@ -497,7 +558,7 @@ export default function Home() {
       document.querySelector<HTMLElement>(".content-viewport")?.scrollTo({ top: 0 });
     };
 
-    runPageTransition(navigating, update, direction);
+    requestEditorExit(() => runPageTransition(navigating, update, direction));
   };
 
   const switchHotbarPage = (event: WheelEvent<HTMLElement>) => {
@@ -521,11 +582,11 @@ export default function Home() {
     wheelSwitchAt.current = now;
     navigate(next);
   };
-  const openReader = (sectionId: string, title: string) => {
+  const openReader = (sectionId: string, articleId: string) => {
     if (navigating.current) return;
     const update = () => {
-      writeAppRoute({ view: "reader", sectionId, title });
-      flushSync(() => { setActive(sectionId); setReading({ sectionId, title }); setEditing(null); setHudAwake(false); });
+      writeAppRoute({ view: "reader", sectionId, articleId });
+      flushSync(() => { setActive(sectionId); setReading({ sectionId, articleId }); setEditing(null); setHudAwake(false); });
       document.querySelector<HTMLElement>(".content-viewport")?.scrollTo({ top: 0 });
     };
     runPageTransition(navigating, update);
@@ -546,14 +607,19 @@ export default function Home() {
     runPageTransition(navigating, update);
   };
 
-  const openEditor = (state: EditorState) => {
+  const openEditor = (request: EditorRequest) => {
     if (!editorAuthorizedRef.current) {
-      requestEditorAccess(() => openEditor(state));
+      requestEditorAccess(() => openEditor(request));
       return;
     }
     if (navigating.current) return;
+    const state: EditorState = request.mode === "edit"
+      ? request
+      : { ...request, articleId: window.crypto.randomUUID() };
     const update = () => {
-      writeAppRoute({ view: "editor", sectionId: state.sectionId, mode: state.mode, title: state.title });
+      writeAppRoute(state.mode === "edit"
+        ? { view: "editor", sectionId: state.sectionId, mode: "edit", articleId: state.articleId }
+        : { view: "editor", sectionId: state.sectionId, mode: "new" });
       flushSync(() => {
         setActive(state.sectionId);
         setEditing(state);
@@ -566,29 +632,34 @@ export default function Home() {
   };
 
   const closeEditor = () => {
-    if (Number(window.history.state?.minelogDepth ?? 0) > 0) {
-      window.history.back();
-      return;
-    }
-    const route: AppRoute = reading
-      ? { view: "reader", sectionId: reading.sectionId, title: reading.title }
-      : { view: "section", sectionId: editing?.sectionId ?? active };
-    writeAppRoute(route, "replace");
-    setEditing(null);
-    setHudAwake(!reading);
-    document.querySelector<HTMLElement>(".content-viewport")?.scrollTo({ top: 0 });
+    requestEditorExit(() => {
+      if (Number(window.history.state?.minelogDepth ?? 0) > 0) {
+        window.history.back();
+        return;
+      }
+      const route: AppRoute = reading
+        ? { view: "reader", sectionId: reading.sectionId, articleId: reading.articleId }
+        : { view: "section", sectionId: editing?.sectionId ?? active };
+      writeAppRoute(route, "replace");
+      setEditing(null);
+      setHudAwake(!reading);
+      document.querySelector<HTMLElement>(".content-viewport")?.scrollTo({ top: 0 });
+    });
   };
 
   const saveArticle = async (value: ArticleEditorValue) => {
     if (!editing || !editorAuthorizedRef.current) return;
     const today = new Date();
     const date = `${String(today.getMonth() + 1).padStart(2, "0")}.${String(today.getDate()).padStart(2, "0")}`;
+    const updatedAt = new Date().toISOString();
     const nextArticle: SectionArticle = {
+      id: value.id,
       title: value.title,
       summary: value.summary,
       tags: value.tags,
       date,
       read: `${Math.max(1, Math.ceil(value.markdown.replace(/\s/g, "").length / 500))} MIN`,
+      updatedAt,
     };
 
     try {
@@ -596,10 +667,7 @@ export default function Home() {
         ...nextArticle,
         sectionId: value.sectionId,
         markdown: value.markdown,
-        updatedAt: new Date().toISOString(),
-      }, editing.mode === "edit" && editing.title
-        ? { sectionId: editing.sectionId, title: editing.title }
-        : undefined);
+      });
     } catch (error) {
       ping(error instanceof Error ? error.message : "\u4FDD\u5B58 Markdown \u6587\u4EF6\u5931\u8D25");
       return;
@@ -607,39 +675,40 @@ export default function Home() {
 
     setContent((current) => {
       const articles = Object.fromEntries(Object.entries(current.articles).map(([id, entries]) => [id, [...entries]])) as Record<string, SectionArticle[]>;
-      const markdown = { ...current.markdown };
-      if (editing.mode === "edit" && editing.title) {
-        articles[editing.sectionId] = (articles[editing.sectionId] ?? []).filter((article) => article.title !== editing.title);
-        delete markdown[articleMarkdownKey(editing.sectionId, editing.title)];
+      for (const sectionId of Object.keys(articles)) {
+        articles[sectionId] = articles[sectionId].filter((article) => article.id !== value.id);
       }
-      articles[value.sectionId] = [nextArticle, ...(articles[value.sectionId] ?? []).filter((article) => article.title !== value.title)];
-      markdown[articleMarkdownKey(value.sectionId, value.title)] = value.markdown;
-      return { articles, markdown };
+      articles[value.sectionId] = [nextArticle, ...(articles[value.sectionId] ?? [])];
+      return {
+        articles,
+        markdown: { ...current.markdown, [articleMarkdownKey(value.id)]: value.markdown },
+      };
     });
     setActive(value.sectionId);
-    setReading({ sectionId: value.sectionId, title: value.title });
+    setReading({ sectionId: value.sectionId, articleId: value.id });
     setEditing(null);
     setHudAwake(false);
-    writeAppRoute({ view: "reader", sectionId: value.sectionId, title: value.title }, "replace");
+    writeAppRoute({ view: "reader", sectionId: value.sectionId, articleId: value.id }, "replace");
     document.querySelector<HTMLElement>(".content-viewport")?.scrollTo({ top: 0 });
     ping(editing.mode === "edit" ? "文章修改已保存" : "新文章已保存");
   };
+
   const deleteArticle = async () => {
-    if (!editing || editing.mode !== "edit" || !editing.title || !editorAuthorizedRef.current) return;
-    const { sectionId, title } = editing;
+    if (!editing || editing.mode !== "edit" || !editorAuthorizedRef.current) return;
+    const { sectionId, articleId } = editing;
     try {
-      await deleteLocalArticleFile(sectionId, title);
+      await deleteLocalArticleFile(sectionId, articleId);
     } catch (error) {
       ping(error instanceof Error ? error.message : "\u5220\u9664 Markdown \u6587\u4EF6\u5931\u8D25");
       return;
     }
     setContent((current) => {
       const markdown = { ...current.markdown };
-      delete markdown[articleMarkdownKey(sectionId, title)];
+      delete markdown[articleMarkdownKey(articleId)];
       return {
         articles: {
           ...current.articles,
-          [sectionId]: (current.articles[sectionId] ?? []).filter((article) => article.title !== title),
+          [sectionId]: (current.articles[sectionId] ?? []).filter((article) => article.id !== articleId),
         },
         markdown,
       };
@@ -671,12 +740,12 @@ export default function Home() {
         {active === "home" && !immersive && <GameIconButton className="search-trigger" icon={MINECRAFT_UI_ICONS.search} label="搜索全部文章" onClick={openSearch} />}
         {active === "more" && !immersive && sections.length > 0 && <GameIconButton className="section-edit-trigger" icon={MINECRAFT_UI_ICONS.manageSections} label="编辑板块" onClick={() => requestEditorAccess(() => setSectionDialog({ mode: "edit" }))} />}
         {activeSection && !immersive && <GameIconButton className="new-article-trigger" icon={MINECRAFT_UI_ICONS.createArticle} label={`在${activeSection.label}新增文章`} onClick={() => openEditor({ mode: "new", sectionId: activeSection.id })} />}
-        {reading && readingArticle && !editing && <GameIconButton className="reader-edit-trigger" icon={MINECRAFT_UI_ICONS.editArticle} label="编辑当前文章" onClick={() => openEditor({ mode: "edit", sectionId: reading.sectionId, title: readingArticle.title })} />}
+        {reading && readingArticle && !editing && <GameIconButton className="reader-edit-trigger" icon={MINECRAFT_UI_ICONS.editArticle} label="编辑当前文章" onClick={() => openEditor({ mode: "edit", sectionId: reading.sectionId, articleId: readingArticle.id })} />}
       </div>
     </header>
 
     <section className={`content-viewport${immersive ? " is-reading" : ""}`} aria-live="polite">
-      {editing ? (editorInitialValue ? <ArticleEditor mode={editing.mode} sections={sections} initialValue={editorInitialValue} onCancel={closeEditor} onSave={saveArticle} onDelete={editing.mode === "edit" ? deleteArticle : undefined} /> : <div className="content-loading-state" role="status">正在载入文章正文…</div>) : readingSection && readingArticle ? (readingMarkdownReady ? <ArticleReader section={readingSection} article={readingArticle} markdown={articleMarkdown(readingSection.id, readingArticle)} onBack={closeReader} /> : <div className="content-loading-state" role="status">正在载入文章正文…</div>) : <>
+      {editing ? (editorInitialValue ? <ArticleEditor mode={editing.mode} sections={sections} initialValue={editorInitialValue} onCancel={closeEditor} onSave={saveArticle} onDelete={editing.mode === "edit" ? deleteArticle : undefined} onDirtyChange={handleEditorDirtyChange} /> : <div className="content-loading-state" role="status">正在载入文章正文…</div>) : readingSection && readingArticle ? (readingMarkdownReady ? <ArticleReader section={readingSection} article={readingArticle} markdown={articleMarkdown(readingArticle)} onBack={closeReader} /> : <div className="content-loading-state" role="status">正在载入文章正文…</div>) : <>
       {active === "home" && <div className="home-content">
         <div className="hero-copy">
           <h1 className="hero-title"><img className="hero-title-image" src="/minecraft/ui/minelog-title.png" alt="MINELOG" /></h1>
@@ -687,8 +756,8 @@ export default function Home() {
             <div className="panel-heading"><div><p className="panel-kicker">WORLD LOG / 01</p><h2>最近更新</h2></div><span className="live-chip"><i /> LIVE</span></div>
             <FeedCarousel entries={recentPosts} arrow={MINECRAFT_UI_ICONS.back} onOpen={(entry) => {
               const section = sectionById.get(entry[4] ?? "");
-              const article = section ? articlesBySection[section.id]?.find((item) => item.title === entry[1]) : undefined;
-              if (section && article) openReader(section.id, article.title); else ping("该文章正文尚未录入");
+              const article = section ? articlesBySection[section.id]?.find((item) => item.id === entry[5]) : undefined;
+              if (section && article) openReader(section.id, article.id); else ping("该文章正文尚未录入");
             }} />
           </section>
           <section className="broadcast-panel paper-panel">
@@ -770,6 +839,17 @@ export default function Home() {
     {notice && <div className="toast" role="status">{notice}</div>}
 
     {authDialogOpen && <EditorAccessModal onAuthorized={finishEditorAuthorization} onClose={closeEditorAuthorization} />}
+
+    {discardDialogOpen && <GameModal
+      eyebrow="UNSAVED CHANGES"
+      title="放弃未保存的更改？"
+      description="当前文章已经发生更改，但尚未保存。离开编辑页后，本次修改将无法恢复。"
+      icon={MINECRAFT_UI_ICONS.editArticle}
+      onClose={continueEditing}
+      footer={<><button type="button" className="pixel-button" onClick={continueEditing}>继续编辑</button><button type="button" className="pixel-button editor-delete-confirm" onClick={discardEditorChanges}>放弃更改</button></>}
+    >
+      <div className="editor-delete-summary editor-discard-summary"><span>尚未保存</span><strong>文章内容已被修改</strong><small>建议先保存文章，再切换到其他页面。</small></div>
+    </GameModal>}
 
     {sectionDialog && <SectionEditorModal
       mode={sectionDialog.mode}

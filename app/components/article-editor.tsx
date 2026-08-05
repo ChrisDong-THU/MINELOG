@@ -9,6 +9,7 @@ import { MarkdownEditorToolbar, type MarkdownEditorCommand, type MarkdownInsertK
 import { MarkdownRenderer } from "./markdown-renderer";
 
 export type ArticleEditorValue = {
+  id: string;
   sectionId: string;
   title: string;
   summary: string;
@@ -30,6 +31,7 @@ export function ArticleEditor({
   onCancel,
   onSave,
   onDelete,
+  onDirtyChange,
 }: {
   mode: "new" | "edit";
   sections: EditorSection[];
@@ -37,6 +39,7 @@ export function ArticleEditor({
   onCancel: () => void;
   onSave: (value: ArticleEditorValue) => void | Promise<void>;
   onDelete?: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [sectionId, setSectionId] = useState(initialValue.sectionId);
   const [title, setTitle] = useState(initialValue.title);
@@ -71,6 +74,17 @@ export function ArticleEditor({
     const characters = markdown.replace(/\s/g, "").length;
     return { characters, minutes: Math.max(1, Math.ceil(characters / 500)) };
   }, [markdown]);
+  const isDirty = sectionId !== initialValue.sectionId
+    || title !== initialValue.title
+    || summary !== initialValue.summary
+    || tags !== initialValue.tags.join("，")
+    || markdown !== (initialValue.markdown || STARTER_MARKDOWN);
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   useEffect(() => {
     if (!insertDialog) return;
@@ -330,6 +344,7 @@ export function ArticleEditor({
     setSavingArticle(true);
     try {
       await onSave({
+        id: initialValue.id,
         sectionId,
         title: title.trim(),
         summary: summary.trim(),
@@ -340,6 +355,21 @@ export function ArticleEditor({
       setSavingArticle(false);
     }
   };
+
+  useEffect(() => {
+    const handleSaveShortcut = (event: globalThis.KeyboardEvent) => {
+      const isSaveShortcut = (event.ctrlKey || event.metaKey)
+        && !event.shiftKey
+        && !event.altKey
+        && event.key.toLowerCase() === "s";
+      if (!isSaveShortcut) return;
+      event.preventDefault();
+      if (event.repeat || savingArticle || deleteConfirm || insertDialog || tableDialog) return;
+      void submit();
+    };
+    window.addEventListener("keydown", handleSaveShortcut);
+    return () => window.removeEventListener("keydown", handleSaveShortcut);
+  });
 
   const indentSelection = (outdent: boolean) => {
     const value = markdownRef.current;
@@ -373,10 +403,7 @@ export function ArticleEditor({
     }
     if (!modifier && !(event.altKey && event.shiftKey && event.code === "Digit5")) return;
 
-    if (key === "s" && !event.shiftKey && !event.altKey) {
-      event.preventDefault();
-      submit();
-    } else if (key === "z" && !event.altKey) {
+    if (key === "z" && !event.altKey) {
       event.preventDefault();
       if (event.shiftKey) {
         redo();

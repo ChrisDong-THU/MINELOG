@@ -7,14 +7,16 @@ export type Section = {
   description: string;
 };
 
-export type FeedEntry = [source: string, title: string, date: string, readTime: string, sectionId?: string];
+export type FeedEntry = [source: string, title: string, date: string, readTime: string, sectionId?: string, articleId?: string];
 
 export type SectionArticle = {
+  id: string;
   title: string;
   summary: string;
   date: string;
   read: string;
   tags: string[];
+  updatedAt?: string;
 };
 
 export type ContentState = {

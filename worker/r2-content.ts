@@ -34,6 +34,7 @@ export interface R2BucketLike {
 }
 
 type Article = {
+  id: string;
   sectionId: string;
   title: string;
   summary: string;
@@ -64,6 +65,11 @@ function safeSectionId(value: unknown) {
   return value;
 }
 
+function safeArticleId(value: unknown) {
+  if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) throw new Error("文章标识不合法");
+  return value.toLowerCase();
+}
+
 function cleanText(value: unknown, field: string, maxLength: number) {
   if (typeof value !== "string") throw new Error(`${field}不能为空`);
   const cleaned = value.replace(/\r\n?/g, "\n").trim();
@@ -80,6 +86,7 @@ function normalizeArticle(value: unknown): Article {
     ? source.tags.filter((tag): tag is string => typeof tag === "string").map((tag) => tag.trim()).filter(Boolean).slice(0, 40)
     : [];
   return {
+    id: safeArticleId(source.id),
     sectionId: safeSectionId(source.sectionId),
     title: cleanText(source.title, "文章标题", 240),
     summary: cleanText(source.summary, "文章副标题", 600),
@@ -122,8 +129,8 @@ async function sha256(value: string | ArrayBuffer) {
   return Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function articleObjectKey(sectionId: string, title: string) {
-  return `articles/${sectionId}/${(await sha256(`${sectionId}\0${title}`)).slice(0, 32)}.json`;
+function articleObjectKey(articleId: string) {
+  return `articles/${articleId}.json`;
 }
 
 async function readArticleIndex(bucket: R2BucketLike) {
@@ -142,7 +149,7 @@ async function writeArticleIndex(bucket: R2BucketLike, records: ArticleIndexReco
 }
 
 async function putArticle(bucket: R2BucketLike, article: Article) {
-  const objectKey = await articleObjectKey(article.sectionId, article.title);
+  const objectKey = articleObjectKey(article.id);
   await bucket.put(objectKey, JSON.stringify(article), { httpMetadata: { contentType: "application/json; charset=utf-8" } });
   return objectKey;
 }
@@ -159,13 +166,26 @@ function indexRecord(article: Article, objectKey: string): ArticleIndexRecord {
   return { ...metadata, objectKey };
 }
 
+function normalizeInitialArticles(values: unknown[]) {
+  const articles = values.map(normalizeArticle);
+  const ids = new Set<string>();
+  const titles = new Set<string>();
+  for (const article of articles) {
+    if (ids.has(article.id)) throw new Error("文章标识重复");
+    ids.add(article.id);
+    const titleKey = `${article.sectionId}\0${article.title}`;
+    if (titles.has(titleKey)) throw new Error("同一板块中已存在同名文章");
+    titles.add(titleKey);
+  }
+  return articles;
+}
+
 async function handleArticles(request: Request, bucket: R2BucketLike, url: URL) {
   if (request.method === "GET") {
-    const sectionId = url.searchParams.get("sectionId");
-    const title = url.searchParams.get("title");
+    const articleId = url.searchParams.get("id");
     const records = await readArticleIndex(bucket);
-    if (sectionId && title) {
-      const record = records.find((item) => item.sectionId === sectionId && item.title === title);
+    if (articleId) {
+      const record = records.find((item) => item.id === safeArticleId(articleId));
       if (!record) return json(404, { error: "文章不存在" });
       const object = await bucket.get(record.objectKey);
       if (!object) return json(404, { error: "文章正文不存在" });
@@ -182,9 +202,9 @@ async function handleArticles(request: Request, bucket: R2BucketLike, url: URL) 
       return json(200, { available: true, initialized: true, articles: records.map(publicMetadata) });
     }
     if (!Array.isArray(payload.articles) || payload.articles.length > 2000) throw new Error("初始化文章列表不合法");
+    const articles = normalizeInitialArticles(payload.articles);
     const records: ArticleIndexRecord[] = [];
-    for (const value of payload.articles) {
-      const article = normalizeArticle(value);
+    for (const article of articles) {
       const objectKey = await putArticle(bucket, article);
       records.push(indexRecord(article, objectKey));
     }
@@ -194,29 +214,24 @@ async function handleArticles(request: Request, bucket: R2BucketLike, url: URL) 
   }
 
   if (request.method === "PUT") {
-    const payload = await requestJson(request, MAX_ARTICLE_REQUEST_BYTES) as { article?: unknown; previous?: { sectionId?: unknown; title?: unknown } };
+    const payload = await requestJson(request, MAX_ARTICLE_REQUEST_BYTES) as { article?: unknown };
     const article = normalizeArticle(payload.article);
     const records = await readArticleIndex(bucket);
-    const previousSectionId = payload.previous?.sectionId === undefined ? article.sectionId : safeSectionId(payload.previous.sectionId);
-    const previousTitle = payload.previous?.title === undefined ? article.title : cleanText(payload.previous.title, "原文章标题", 240);
-    const previous = records.find((item) => item.sectionId === previousSectionId && item.title === previousTitle);
-    const duplicate = records.find((item) => item.sectionId === article.sectionId && item.title === article.title && item.objectKey !== previous?.objectKey);
+    const duplicate = records.find((item) => item.sectionId === article.sectionId && item.title === article.title && item.id !== article.id);
     if (duplicate) return json(409, { error: "同一板块中已存在同名文章" });
     const objectKey = await putArticle(bucket, article);
-    if (previous && previous.objectKey !== objectKey) await bucket.delete(previous.objectKey);
-    const next = records.filter((item) => item.objectKey !== previous?.objectKey && !(item.sectionId === article.sectionId && item.title === article.title));
+    const next = records.filter((item) => item.id !== article.id);
     next.unshift(indexRecord(article, objectKey));
     await writeArticleIndex(bucket, next);
     await bucket.put(INITIALIZED_KEY, JSON.stringify({ initializedAt: new Date().toISOString() }), { httpMetadata: { contentType: "application/json" } });
     return json(200, { article });
   }
-
   if (request.method === "DELETE") {
-    const payload = await requestJson(request, 32 * 1024) as { sectionId?: unknown; title?: unknown };
+    const payload = await requestJson(request, 32 * 1024) as { sectionId?: unknown; id?: unknown };
     const sectionId = safeSectionId(payload.sectionId);
-    const title = payload.title === undefined ? undefined : cleanText(payload.title, "文章标题", 240);
+    const articleId = payload.id === undefined ? undefined : safeArticleId(payload.id);
     const records = await readArticleIndex(bucket);
-    const removed = records.filter((item) => item.sectionId === sectionId && (title === undefined || item.title === title));
+    const removed = records.filter((item) => item.sectionId === sectionId && (articleId === undefined || item.id === articleId));
     if (removed.length) await bucket.delete(removed.map((item) => item.objectKey));
     await writeArticleIndex(bucket, records.filter((item) => !removed.includes(item)));
     return json(200, { deleted: removed.length });

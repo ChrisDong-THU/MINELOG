@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { access, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname, join, resolve } from "node:path";
@@ -8,6 +7,7 @@ const API_PATH = "/api/local-articles";
 const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
 
 export type LocalArticleFile = {
+  id: string;
   sectionId: string;
   title: string;
   summary: string;
@@ -50,6 +50,13 @@ function safeSectionId(value: unknown) {
   return value;
 }
 
+function safeArticleId(value: unknown) {
+  if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+    throw new Error("文章标识不合法");
+  }
+  return value.toLowerCase();
+}
+
 function cleanText(value: unknown, field: string, maxLength: number) {
   if (typeof value !== "string") throw new Error(`${field}不能为空`);
   const cleaned = value.replace(/\r\n?/g, "\n").trim();
@@ -66,6 +73,7 @@ function normalizeArticle(value: unknown): LocalArticleFile & { updatedAt: strin
     ? source.tags.filter((tag): tag is string => typeof tag === "string").map((tag) => tag.trim()).filter(Boolean).slice(0, 40)
     : [];
   return {
+    id: safeArticleId(source.id),
     sectionId: safeSectionId(source.sectionId),
     title: cleanText(source.title, "文章标题", 240),
     summary: cleanText(source.summary, "文章副标题", 600),
@@ -77,19 +85,14 @@ function normalizeArticle(value: unknown): LocalArticleFile & { updatedAt: strin
   };
 }
 
-function slug(value: string) {
-  const normalized = value.normalize("NFKC").replace(/[^\p{Letter}\p{Number}]+/gu, "-").replace(/^-+|-+$/g, "").slice(0, 72);
-  return normalized || "article";
-}
-
 function filePathFor(root: string, article: LocalArticleFile) {
-  const hash = createHash("sha256").update(`${article.sectionId}\0${article.title}`).digest("hex").slice(0, 10);
-  return join(root, article.sectionId, `${slug(article.title)}-${hash}.md`);
+  return join(root, article.sectionId, `${article.id}.md`);
 }
 
 function serialize(article: LocalArticleFile & { updatedAt: string }) {
   return [
     "---",
+    `id: ${scalar(article.id)}`,
     `title: ${scalar(article.title)}`,
     `summary: ${scalar(article.summary)}`,
     `section: ${scalar(article.sectionId)}`,
@@ -103,7 +106,6 @@ function serialize(article: LocalArticleFile & { updatedAt: string }) {
     "",
   ].join("\n");
 }
-
 function parseScalar(value: string) {
   try {
     return JSON.parse(value) as unknown;
@@ -125,6 +127,7 @@ function parseArticle(filePath: string, source: string): ArticleFileRecord | nul
   }
   try {
     const article = normalizeArticle({
+      id: metadata.id,
       sectionId: metadata.section,
       title: metadata.title,
       summary: metadata.summary,
@@ -206,13 +209,11 @@ async function initialized(markerPath: string) {
   }
 }
 
-async function saveOne(root: string, value: unknown, previous?: { sectionId?: unknown; title?: unknown }) {
+async function saveOne(root: string, value: unknown, pruneAssets = true) {
   const article = normalizeArticle(value);
   const existing = await readAll(root);
-  const previousSectionId = previous?.sectionId === undefined ? article.sectionId : safeSectionId(previous.sectionId);
-  const previousTitle = previous?.title === undefined ? article.title : cleanText(previous.title, "原文章标题", 240);
-  const previousRecord = existing.find((record) => record.sectionId === previousSectionId && record.title === previousTitle);
-  const duplicate = existing.find((record) => record.sectionId === article.sectionId && record.title === article.title && record.filePath !== previousRecord?.filePath);
+  const previousRecord = existing.find((record) => record.id === article.id);
+  const duplicate = existing.find((record) => record.sectionId === article.sectionId && record.title === article.title && record.id !== article.id);
   if (duplicate) throw new Error("同一板块中已存在同名文章");
 
   const destination = filePathFor(root, article);
@@ -227,21 +228,37 @@ async function saveOne(root: string, value: unknown, previous?: { sectionId?: un
     await rename(temporary, destination);
   }
   if (previousRecord && previousRecord.filePath !== destination) await rm(previousRecord.filePath, { force: true });
-  await pruneUnusedAssets(root);
+  if (pruneAssets) await pruneUnusedAssets(root);
   return article;
+}
+
+function normalizeInitialArticles(values: unknown[]) {
+  const articles = values.map(normalizeArticle);
+  const ids = new Set<string>();
+  const titles = new Set<string>();
+  for (const article of articles) {
+    if (ids.has(article.id)) throw new Error("文章标识重复");
+    ids.add(article.id);
+    const titleKey = `${article.sectionId}\0${article.title}`;
+    if (titles.has(titleKey)) throw new Error("同一板块中已存在同名文章");
+    titles.add(titleKey);
+  }
+  return articles;
 }
 
 async function initializeStore(root: string, markerPath: string, values: unknown) {
   if (await initialized(markerPath)) return readAll(root);
   if (!Array.isArray(values) || values.length > 2000) throw new Error("初始化文章列表不合法");
+  const articles = normalizeInitialArticles(values);
   await mkdir(root, { recursive: true });
-  for (const value of values) await saveOne(root, value);
-  await writeFile(markerPath, JSON.stringify({ version: 1, initializedAt: new Date().toISOString() }, null, 2), "utf8");
+  for (const article of articles) await saveOne(root, article, false);
+  await pruneUnusedAssets(root);
+  await writeFile(markerPath, JSON.stringify({ version: 2, initializedAt: new Date().toISOString() }, null, 2), "utf8");
   return readAll(root);
 }
 
 function publicArticles(records: ArticleFileRecord[]) {
-  return records.map(({ filePath: _filePath, ...article }) => article);
+  return records.map(({ filePath: _filePath, markdown: _markdown, ...article }) => article);
 }
 
 export function localArticleFiles(): Plugin {
@@ -259,7 +276,15 @@ export function localArticleFiles(): Plugin {
         if (url.pathname !== API_PATH) return next();
         try {
           if (req.method === "GET") {
-            return json(res, 200, { available: true, initialized: await initialized(markerPath), articles: publicArticles(await readAll(root)) });
+            const records = await readAll(root);
+            const articleId = url.searchParams.get("id");
+            if (articleId) {
+              const record = records.find((article) => article.id === safeArticleId(articleId));
+              if (!record) return json(res, 404, { error: "文章不存在" });
+              const { filePath: _filePath, ...article } = record;
+              return json(res, 200, { article });
+            }
+            return json(res, 200, { available: true, initialized: await initialized(markerPath), articles: publicArticles(records) });
           }
           if (req.method === "POST") {
             const payload = await bodyJson(req) as { articles?: unknown };
@@ -267,15 +292,15 @@ export function localArticleFiles(): Plugin {
             return json(res, 200, { available: true, initialized: true, articles: publicArticles(articles) });
           }
           if (req.method === "PUT") {
-            const payload = await bodyJson(req) as { article?: unknown; previous?: { sectionId?: unknown; title?: unknown } };
-            const article = await saveOne(root, payload.article, payload.previous);
+            const payload = await bodyJson(req) as { article?: unknown };
+            const article = await saveOne(root, payload.article);
             return json(res, 200, { article });
           }
           if (req.method === "DELETE") {
-            const payload = await bodyJson(req) as { sectionId?: unknown; title?: unknown };
+            const payload = await bodyJson(req) as { sectionId?: unknown; id?: unknown };
             const sectionId = safeSectionId(payload.sectionId);
-            const title = payload.title === undefined ? undefined : cleanText(payload.title, "文章标题", 240);
-            const matches = (await readAll(root)).filter((record) => record.sectionId === sectionId && (title === undefined || record.title === title));
+            const articleId = payload.id === undefined ? undefined : safeArticleId(payload.id);
+            const matches = (await readAll(root)).filter((record) => record.sectionId === sectionId && (articleId === undefined || record.id === articleId));
             await Promise.all(matches.map((record) => rm(record.filePath, { force: true })));
             await pruneUnusedAssets(root);
             return json(res, 200, { deleted: matches.length });

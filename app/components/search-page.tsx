@@ -77,7 +77,7 @@ export function SearchPage({
   query: string;
   documents: SearchDocument[];
   onQueryChange: (query: string) => void;
-  onOpen: (sectionId: string, title: string) => void;
+  onOpen: (sectionId: string, articleId: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const normalizedQuery = normalize(query);
@@ -159,7 +159,7 @@ export function SearchPage({
     {query && <section className="search-results" aria-live="polite">
       <div className="search-results-heading"><div><span>SEARCH RESULTS</span><h2>{results.length ? `找到 ${results.length} 篇文章` : "没有找到匹配内容"}</h2></div><small>按相关度排序</small></div>
       {results.length > 0 ? <div className="search-result-list">{results.map(({ indexed }) =>
-        <button type="button" className="search-result-card" key={`${indexed.document.sectionId}:${indexed.document.article.title}`} onClick={() => onOpen(indexed.document.sectionId, indexed.document.article.title)}>
+        <button type="button" className="search-result-card" key={indexed.document.article.id} onClick={() => onOpen(indexed.document.sectionId, indexed.document.article.id)}>
           <span className="search-result-icon"><img src={indexed.document.sectionIcon} alt="" /></span>
           <span className="search-result-copy">
             <small>{indexed.document.sectionLabel} · {indexed.document.article.date} · {indexed.document.article.read}</small>
