@@ -105,12 +105,12 @@ async function writeSections(filePath: string, sections: LocalSection[]) {
 }
 
 export function localSections(): Plugin {
-  let filePath = resolve(process.cwd(), "content", "local", ".sections.json");
+  let filePath = resolve(process.cwd(), "content", "local", "state", "sections.json");
   return {
     name: "minelog-local-sections",
     apply: "serve",
     configResolved(config) {
-      filePath = resolve(config.root, "content", "local", ".sections.json");
+      filePath = resolve(config.root, "content", "local", "state", "sections.json");
     },
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {

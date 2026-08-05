@@ -318,22 +318,20 @@ async function imagePayload(value: unknown) {
 
 async function handleAssets(request: Request, bucket: R2BucketLike, url: URL) {
   if (request.method === "POST" && url.pathname === ASSET_API) {
-    const payload = await requestJson(request, MAX_IMAGE_REQUEST_BYTES) as { sectionId?: unknown; image?: unknown };
-    const sectionId = safeSectionId(payload.sectionId);
+    const payload = await requestJson(request, MAX_IMAGE_REQUEST_BYTES) as { image?: unknown };
     const { mime, buffer } = await imagePayload(payload.image);
     if (buffer.byteLength > MAX_IMAGE_BYTES) throw new Error("图片超过 10 MB 限制");
     const fileName = `${(await sha256(buffer)).slice(0, 24)}.${imageExtensionForMime(mime)}`;
-    const objectKey = `assets/${sectionId}/${fileName}`;
+    const objectKey = `assets/${fileName}`;
     await bucket.put(objectKey, buffer, { httpMetadata: { contentType: mime } });
-    return json(200, { url: `${ASSET_API}/${encodeURIComponent(sectionId)}/${fileName}` });
+    return json(200, { url: `${ASSET_API}/${fileName}` });
   }
 
   if (request.method === "GET" && url.pathname.startsWith(`${ASSET_API}/`)) {
     const parts = url.pathname.slice(ASSET_API.length + 1).split("/").map(decodeURIComponent);
-    const sectionId = safeSectionId(parts[0]);
-    const fileName = parts[1];
-    if (parts.length !== 2 || !STORED_IMAGE_FILE_PATTERN.test(fileName ?? "")) return new Response("Not found", { status: 404 });
-    const object = await bucket.get(`assets/${sectionId}/${fileName}`);
+    const fileName = parts[0];
+    if (parts.length !== 1 || !STORED_IMAGE_FILE_PATTERN.test(fileName ?? "")) return new Response("Not found", { status: 404 });
+    const object = await bucket.get(`assets/${fileName}`);
     if (!object) return new Response("Not found", { status: 404 });
     const securityHeaders = imageResponseSecurityHeaders(fileName);
     return new Response(object.body, {

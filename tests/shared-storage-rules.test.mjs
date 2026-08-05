@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -27,7 +27,7 @@ test("图片存储规则在本地与线上适配器之间共享", () => {
   assert.equal(imageExtensionForMime("image/svg+xml"), "svg");
   assert.equal(imageMimeForExtension("svg"), "image/svg+xml");
   assert.equal(imageMimeForStoredFile("0123456789abcdef01234567.svg"), "image/svg+xml");
-  assert.equal(versionLocalArticleImageUrl("/api/local-assets/notes/image.svg"), "/api/local-assets/notes/image.svg?local-asset-v=2");
+  assert.equal(versionLocalArticleImageUrl("/api/local-assets/image.svg"), "/api/local-assets/image.svg?local-asset-v=2");
   assert.equal(versionLocalArticleImageUrl("https://example.com/image.svg"), "https://example.com/image.svg");
   assert.match("0123456789abcdef01234567.svg", STORED_IMAGE_FILE_PATTERN);
   assert.deepEqual(imageResponseSecurityHeaders("0123456789abcdef01234567.svg"), {
@@ -46,10 +46,10 @@ test("编辑鉴权只保护内容写接口", () => {
 });
 
 test("stored image references are unique per article and counted across articles", () => {
-  const firstUrl = "/api/local-assets/notes/0123456789abcdef01234567.svg";
-  const secondUrl = "/api/local-assets/notes/89abcdef0123456701234567.png";
-  const firstKey = "assets/notes/0123456789abcdef01234567.svg";
-  const secondKey = "assets/notes/89abcdef0123456701234567.png";
+  const firstUrl = "/api/local-assets/0123456789abcdef01234567.svg";
+  const secondUrl = "/api/local-assets/89abcdef0123456701234567.png";
+  const firstKey = "assets/0123456789abcdef01234567.svg";
+  const secondKey = "assets/89abcdef0123456701234567.png";
 
   assert.equal(imageAssetKeyFromUrl(`${firstUrl}?local-asset-v=2`), firstKey);
   assert.equal(imageAssetKeyFromUrl("https://example.com/image.svg"), null);
@@ -64,8 +64,7 @@ test("stored image references are unique per article and counted across articles
 });
 test("local image responses use browser-renderable MIME types", async () => {
   const projectRoot = await mkdtemp(join(tmpdir(), "minelog-local-assets-"));
-  const sectionId = "notes";
-  const assetsDirectory = join(projectRoot, "content", "local", sectionId, "assets");
+  const assetsDirectory = join(projectRoot, "content", "local", "assets");
   const pngName = "89abcdef0123456701234567.png";
   await mkdir(assetsDirectory, { recursive: true });
   await writeFile(join(assetsDirectory, pngName), new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
@@ -96,17 +95,16 @@ test("local image responses use browser-renderable MIME types", async () => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        sectionId,
         image: { dataUrl: `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}` },
       }),
     });
     assert.equal(uploadResponse.status, 200);
     const uploaded = await uploadResponse.json();
-    assert.match(uploaded.url, new RegExp(`^/api/local-assets/${sectionId}/[a-f0-9]{24}\\.svg$`));
+    assert.match(uploaded.url, /^\/api\/local-assets\/[a-f0-9]{24}\.svg$/);
 
     const [svgResponse, pngResponse] = await Promise.all([
       fetch(`${origin}${uploaded.url}`),
-      fetch(`${origin}/api/local-assets/${sectionId}/${pngName}`),
+      fetch(`${origin}/api/local-assets/${pngName}`),
     ]);
 
     assert.equal(svgResponse.status, 200);
@@ -149,6 +147,14 @@ test("local storage preserves shared images until the final reference is removed
     const address = server.address();
     assert.ok(address && typeof address === "object");
     const origin = `http://127.0.0.1:${address.port}`;
+    const initialized = await fetch(`${origin}/api/local-articles`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ articles: [] }),
+    });
+    assert.equal(initialized.status, 200);
+    const marker = JSON.parse(await readFile(join(projectRoot, "content", "local", "state", "initialized.json"), "utf8"));
+    assert.equal(marker.version, 3);
 
     async function uploadSvg(fill) {
       const svg = `<svg xmlns="http://www.w3.org/2000/svg"><path fill="${fill}" d="M0 0h1v1H0z"/></svg>`;
@@ -156,7 +162,6 @@ test("local storage preserves shared images until the final reference is removed
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          sectionId: "notes",
           image: { dataUrl: `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}` },
         }),
       });
@@ -164,14 +169,14 @@ test("local storage preserves shared images until the final reference is removed
       return (await response.json()).url;
     }
 
-    async function saveArticle(id, title, markdown, cleanupAssetUrls = []) {
+    async function saveArticle(id, title, markdown, cleanupAssetUrls = [], sectionId = "notes") {
       return fetch(`${origin}/api/local-articles`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           article: {
             id,
-            sectionId: "notes",
+            sectionId,
             title,
             summary: "local cleanup",
             date: "08.06",
@@ -192,9 +197,25 @@ test("local storage preserves shared images until the final reference is removed
     assert.equal((await saveArticle(firstId, "First", sharedMarkdown)).status, 200);
     assert.equal((await saveArticle(secondId, "Second", sharedMarkdown)).status, 200);
 
-    assert.equal((await saveArticle(firstId, "First", "removed", [sharedUrl])).status, 200);
+    assert.equal((await saveArticle(firstId, "First", sharedMarkdown, [], "archive")).status, 200);
+    const storedArticle = await readFile(join(projectRoot, "content", "local", "articles", `${firstId}.md`), "utf8");
+    assert.match(storedArticle, /section: "archive"/);
+    assert.deepEqual((await readdir(join(projectRoot, "content", "local"))).sort(), ["articles", "assets", "state"]);
+
+    const deletedSection = await fetch(`${origin}/api/local-articles`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sectionId: "archive" }),
+    });
+    assert.equal(deletedSection.status, 200);
     assert.equal((await fetch(`${origin}${sharedUrl}`)).status, 200);
-    assert.equal((await saveArticle(secondId, "Second", "removed", [sharedUrl])).status, 200);
+
+    const deletedFinalReference = await fetch(`${origin}/api/local-articles`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sectionId: "notes", id: secondId }),
+    });
+    assert.equal(deletedFinalReference.status, 200);
     assert.equal((await fetch(`${origin}${sharedUrl}`)).status, 404);
 
     const unusedUrl = await uploadSvg("#def");

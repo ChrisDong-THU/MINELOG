@@ -6,11 +6,12 @@ import {
   imageAssetKeyFromUrl,
   imageAssetKeysFromMarkdown,
   imageAssetReferenceCounts,
-  storedImageAssetParts,
+  storedImageAssetFileName,
 } from "../shared/image-assets.ts";
 
 const API_PATH = "/api/local-articles";
 const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
+const ARTICLE_FILE_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.md$/i;
 
 export type LocalArticleFile = {
   id: string;
@@ -92,7 +93,7 @@ function normalizeArticle(value: unknown): LocalArticleFile & { updatedAt: strin
 }
 
 function filePathFor(root: string, article: LocalArticleFile) {
-  return join(root, article.sectionId, `${article.id}.md`);
+  return join(root, "articles", `${article.id}.md`);
 }
 
 function serialize(article: LocalArticleFile & { updatedAt: string }) {
@@ -149,7 +150,8 @@ function parseArticle(filePath: string, source: string): ArticleFileRecord | nul
   }
 }
 
-async function markdownFiles(directory: string): Promise<string[]> {
+async function readAll(root: string): Promise<ArticleFileRecord[]> {
+  const directory = join(root, "articles");
   let entries;
   try {
     entries = await readdir(directory, { withFileTypes: true });
@@ -157,20 +159,12 @@ async function markdownFiles(directory: string): Promise<string[]> {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
     throw error;
   }
-  const nested = await Promise.all(entries.map(async (entry) => {
-    const path = join(directory, entry.name);
-    if (entry.isDirectory()) return markdownFiles(path);
-    return entry.isFile() && entry.name.toLowerCase().endsWith(".md") ? [path] : [];
-  }));
-  return nested.flat();
-}
-
-async function readAll(root: string): Promise<ArticleFileRecord[]> {
-  const paths = await markdownFiles(root);
+  const paths = entries
+    .filter((entry) => entry.isFile() && ARTICLE_FILE_PATTERN.test(entry.name))
+    .map((entry) => join(directory, entry.name));
   const records = await Promise.all(paths.map(async (path) => parseArticle(path, await readFile(path, "utf8"))));
   return records.filter((record): record is ArticleFileRecord => Boolean(record)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
-
 function normalizeCleanupAssetKeys(value: unknown) {
   if (value === undefined) return [] as string[];
   if (!Array.isArray(value) || value.length > 500) throw new Error("待清理图片列表不合法");
@@ -189,8 +183,8 @@ async function deleteUnreferencedAssets(root: string, candidates: Iterable<strin
   const counts = imageAssetReferenceCounts(records.map(recordAssetKeys));
   const deletions = [...new Set(candidates)].flatMap((assetKey) => {
     if ((counts.get(assetKey) ?? 0) > 0) return [];
-    const parts = storedImageAssetParts(assetKey);
-    return parts ? [rm(join(root, parts.sectionId, "assets", parts.fileName), { force: true })] : [];
+    const fileName = storedImageAssetFileName(assetKey);
+    return fileName ? [rm(join(root, "assets", fileName), { force: true })] : [];
   });
   await Promise.all(deletions);
 }
@@ -250,12 +244,16 @@ function normalizeInitialArticles(values: unknown[]) {
 }
 
 async function initializeStore(root: string, markerPath: string, values: unknown) {
+  await Promise.all([
+    mkdir(join(root, "articles"), { recursive: true }),
+    mkdir(join(root, "assets"), { recursive: true }),
+    mkdir(dirname(markerPath), { recursive: true }),
+  ]);
   if (await initialized(markerPath)) return readAll(root);
   if (!Array.isArray(values) || values.length > 2000) throw new Error("初始化文章列表不合法");
   const articles = normalizeInitialArticles(values);
-  await mkdir(root, { recursive: true });
   for (const article of articles) await saveOne(root, article);
-  await writeFile(markerPath, JSON.stringify({ version: 2, initializedAt: new Date().toISOString() }, null, 2), "utf8");
+  await writeFile(markerPath, JSON.stringify({ version: 3, initializedAt: new Date().toISOString() }, null, 2), "utf8");
   return readAll(root);
 }
 
@@ -272,7 +270,7 @@ export function localArticleFiles(): Plugin {
       root = resolve(config.root, "content", "local");
     },
     configureServer(server) {
-      const markerPath = join(root, ".initialized.json");
+      const markerPath = join(root, "state", "initialized.json");
       server.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url ?? "/", "http://localhost");
         if (url.pathname !== API_PATH) return next();

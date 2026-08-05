@@ -33,11 +33,6 @@ async function bodyJson(req: IncomingMessage) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
 }
 
-function safeSectionId(value: unknown) {
-  if (typeof value !== "string" || !/^[a-zA-Z0-9_-]{1,100}$/.test(value)) throw new Error("板块标识不合法");
-  return value;
-}
-
 function checkedBuffer(value: ArrayBuffer | Uint8Array) {
   const buffer = value instanceof ArrayBuffer
     ? Buffer.from(value)
@@ -65,8 +60,8 @@ async function readImageSource(value: unknown) {
   throw new Error("没有检测到可保存的图片");
 }
 
-function assetUrl(sectionId: string, fileName: string) {
-  return `${ASSET_API}/${encodeURIComponent(sectionId)}/${encodeURIComponent(fileName)}`;
+function assetUrl(fileName: string) {
+  return `${ASSET_API}/${encodeURIComponent(fileName)}`;
 }
 
 export function localArticleAssets(): Plugin {
@@ -82,14 +77,14 @@ export function localArticleAssets(): Plugin {
         const url = new URL(req.url ?? "/", "http://localhost");
         if (req.method === "POST" && url.pathname === ASSET_API) {
           try {
-            const payload = await bodyJson(req) as { sectionId?: unknown; image?: unknown };
-            const sectionId = safeSectionId(payload.sectionId);
+            const payload = await bodyJson(req) as { image?: unknown };
+
             const { mime, buffer } = await readImageSource(payload.image);
             const fileName = `${createHash("sha256").update(buffer).digest("hex").slice(0, 24)}.${imageExtensionForMime(mime)}`;
-            const destination = join(contentRoot, sectionId, "assets", fileName);
+            const destination = join(contentRoot, "assets", fileName);
             await mkdir(dirname(destination), { recursive: true });
             await writeFile(destination, buffer);
-            return json(res, 200, { url: assetUrl(sectionId, fileName) });
+            return json(res, 200, { url: assetUrl(fileName) });
           } catch (error) {
             server.config.logger.error(error instanceof Error ? error.message : String(error));
             return json(res, 400, { error: error instanceof Error ? error.message : "图片保存失败" });
@@ -99,11 +94,10 @@ export function localArticleAssets(): Plugin {
         if (req.method === "GET" && url.pathname.startsWith(`${ASSET_API}/`)) {
           try {
             const parts = url.pathname.slice(ASSET_API.length + 1).split("/").map(decodeURIComponent);
-            const sectionId = safeSectionId(parts[0]);
-            const fileName = parts[1];
-            if (!fileName || parts.length !== 2 || !STORED_IMAGE_FILE_PATTERN.test(fileName)) throw new Error("图片路径不合法");
+            const fileName = parts[0];
+            if (!fileName || parts.length !== 1 || !STORED_IMAGE_FILE_PATTERN.test(fileName)) throw new Error("图片路径不合法");
             const mime = imageMimeForStoredFile(fileName);
-            const buffer = await readFile(join(contentRoot, sectionId, "assets", fileName));
+            const buffer = await readFile(join(contentRoot, "assets", fileName));
             res.statusCode = 200;
             res.setHeader("content-type", mime);
             res.setHeader("content-length", buffer.length);

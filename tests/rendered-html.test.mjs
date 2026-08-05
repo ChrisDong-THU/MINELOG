@@ -32,7 +32,7 @@ test("server renders the MINELOG application shell", async () => {
 });
 
 test("keeps navigation, rendering and local content storage in focused modules", async () => {
-  const [page, navigation, storage, renderer, resizableImage, searchPage, layout, fileClient, filePlugin, assetClient, assetPlugin, editor, toolbar, articleReader, contentModel, hotbarModel, gitignore, minecraftIcons, sectionEditor, imageAssets, gameModal] = await Promise.all([
+  const [page, navigation, storage, renderer, resizableImage, searchPage, layout, fileClient, filePlugin, assetClient, assetPlugin, editor, toolbar, articleReader, contentModel, hotbarModel, gitignore, minecraftIcons, sectionEditor, imageAssets, gameModal, r2Content] = await Promise.all([
     source("app/page.tsx"),
     source("app/navigation.ts"),
     source("app/browser-storage.ts"),
@@ -54,6 +54,7 @@ test("keeps navigation, rendering and local content storage in focused modules",
     source("app/components/section-editor-modal.tsx"),
     source("shared/image-assets.ts"),
     source("app/components/game-modal.tsx"),
+    source("worker/r2-content.ts"),
   ]);
   const editorBase = await source("app/editor-base.css");
   const globalStyles = await source("app/globals.css");
@@ -146,6 +147,10 @@ test("keeps navigation, rendering and local content storage in focused modules",
   assert.match(fileClient, /\/api\/local-articles/);
   assert.match(filePlugin, /writeFile/);
   assert.match(filePlugin, /"content", "local"/);
+  assert.match(filePlugin, /join\(root, "articles"/);
+  assert.doesNotMatch(filePlugin, /join\(root, article\.sectionId/);
+  assert.doesNotMatch(filePlugin, /entry\.isDirectory\(\)/);
+  assert.match(filePlugin, /ARTICLE_FILE_PATTERN/);
   assert.match(filePlugin, /deleteUnreferencedAssets/);
   assert.match(filePlugin, /imageAssetReferenceCounts/);
   assert.match(editor, /uploadedAssetUrls\.current\.add\(url\)/);
@@ -153,7 +158,10 @@ test("keeps navigation, rendering and local content storage in focused modules",
   assert.match(assetClient, /FileReader/);
   assert.match(assetPlugin, /writeFile/);
   assert.match(assetPlugin, /"content", "local"/);
-  assert.match(assetPlugin, /assets/);
+  assert.match(assetPlugin, /join\(contentRoot, "assets", fileName\)/);
+  assert.doesNotMatch(assetPlugin, /sectionId/);
+  assert.match(r2Content, /`assets\/\$\{fileName\}`/);
+  assert.doesNotMatch(r2Content, /`assets\/\$\{sectionId\}/);
   assert.match(assetPlugin, /from "\.\.\/shared\/image-assets\.ts"/);
   assert.match(imageAssets, /"image\/svg\+xml": "svg"/);
   assert.match(renderer, /ResizableMarkdownImage/);
@@ -256,7 +264,7 @@ test("separates local persistence and remote device trust", async () => {
   assert.match(localAuth, /authorized: true/);
   assert.match(localAuth, /local: true/);
   assert.doesNotMatch(localAuth, /editorMutationAllowed/);
-  assert.match(localSections, /"content", "local", "\.sections\.json"/);
+  assert.match(localSections, /"content", "local", "state", "sections\.json"/);
   assert.match(localSections, /await rename\(temporary, filePath\)/);
   assert.match(localSections, /initialized: await sectionsFileExists/);
   assert.match(remoteSections, /initialized\?: boolean/);

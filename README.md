@@ -45,9 +45,9 @@ Windows PowerShell 如果限制 npm.ps1，可使用：
 
 打开终端显示的本地地址即可。本地模式具有以下行为：
 
-- 文章保存为 content/local/<板块>/<文章名>-<哈希>.md。
-- 图片保存在对应板块的 content/local/<板块>/assets/。
-- 板块配置保存在 content/local/.sections.json。
+- 文章统一保存为 `content/local/articles/<文章 UUID>.md`，板块归属仅记录在文档元数据中。
+- 图片等附件统一保存在 `content/local/assets/<内容哈希>.<扩展名>`，不再创建板块子目录。
+- 板块配置和初始化状态保存在 `content/local/state/`。
 - 浏览器本地状态会在首次运行时迁移到文件存储，重启后恢复。
 - 保存文章时会清理已不再被任何正文引用的本地文章图片。
 
@@ -103,8 +103,8 @@ content/local/ 已被 Git 忽略。要迁移或备份本地知识库，请停止
 
 ## 线上数据与安全
 
-- 文章索引位于 R2 的 state/article-index.json，正文按文章拆分保存在 articles/。
-- 板块配置位于 state/sections.json，图片保存在 assets/。
+- 文章索引位于 R2 的 `state/article-index.json`，正文统一保存为 `articles/<文章 UUID>.json`。
+- 板块配置位于 `state/sections.json`，图片等附件统一保存为 `assets/<内容哈希>.<扩展名>`；文章和附件路径均不依赖板块。
 - 阅读请求不需要编辑密钥；新建、修改、删除和上传资源必须通过密钥验证。
 - 验证成功后使用 HttpOnly、SameSite=Strict 的签名 Cookie 信任当前设备 5 天。
 - 连续失败 5 次会锁定 15 分钟。

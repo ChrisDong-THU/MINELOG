@@ -56,14 +56,13 @@ test("R2 accepts and safely serves SVG article images", async () => {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      sectionId: "notes",
       image: { dataUrl: `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}` },
     }),
   }), bucket);
 
   assert.equal(upload?.status, 200);
   const payload = await upload.json();
-  assert.match(payload.url, /^\/api\/local-assets\/notes\/[a-f0-9]{24}\.svg$/);
+  assert.match(payload.url, /^\/api\/local-assets\/[a-f0-9]{24}\.svg$/);
 
   const download = await handleR2ContentRequest(new Request(`https://minelog.example${payload.url}`), bucket);
   assert.equal(download?.status, 200);
@@ -107,7 +106,7 @@ test("R2 uses permanent UUID article identity and rejects same-section duplicate
   const renamed = await handleR2ContentRequest(new Request("https://minelog.example/api/local-articles", {
     method: "PUT",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ article: { ...article, title: "重命名后", markdown: "renamed body" } }),
+    body: JSON.stringify({ article: { ...article, sectionId: "archive", title: "重命名后", markdown: "renamed body" } }),
   }), bucket);
   assert.equal(renamed?.status, 200);
   assert.ok(bucket.objects.has(`articles/${firstId}.json`));
@@ -117,6 +116,7 @@ test("R2 uses permanent UUID article identity and rejects same-section duplicate
   const loadedBody = await loaded.json();
   assert.equal(loadedBody.article.id, firstId);
   assert.equal(loadedBody.article.title, "重命名后");
+  assert.equal(loadedBody.article.sectionId, "archive");
 });
 test("R2 validates the complete initial article set before writing objects", async () => {
   const bucket = new MemoryBucket();
@@ -153,7 +153,6 @@ test("R2 deletes an image only after its last article reference is removed", asy
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        sectionId: "notes",
         image: { dataUrl: `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}` },
       }),
     }), bucket);
@@ -161,14 +160,14 @@ test("R2 deletes an image only after its last article reference is removed", asy
     return (await response.json()).url;
   }
 
-  async function saveArticle(id, title, markdown, cleanupAssetUrls = []) {
+  async function saveArticle(id, title, markdown, cleanupAssetUrls = [], sectionId = "notes") {
     return handleR2ContentRequest(new Request(`${origin}/api/local-articles`, {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         article: {
           id,
-          sectionId: "notes",
+          sectionId,
           title,
           summary: "reference cleanup",
           date: "08.06",

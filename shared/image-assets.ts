@@ -15,28 +15,29 @@ const IMAGE_EXTENSION_TYPES = Object.fromEntries(
 
 export const STORED_IMAGE_FILE_PATTERN = /^[a-f0-9]{24}\.(png|jpg|gif|webp|avif|bmp|svg|ico)$/;
 
-const EXACT_STORED_IMAGE_URL_PATTERN = /^\/api\/local-assets\/([a-zA-Z0-9_-]{1,100})\/([a-f0-9]{24}\.(?:png|jpg|gif|webp|avif|bmp|svg|ico))(?:[?#][^\s)]*)?$/;
-export const SVG_CONTENT_SECURITY_POLICY = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox";
-const STORED_IMAGE_URL_PATTERN = /\/api\/local-assets\/([a-zA-Z0-9_-]{1,100})\/([a-f0-9]{24}\.(?:png|jpg|gif|webp|avif|bmp|svg|ico))(?:[?#][^\s)]*)?/g;
+const STORED_IMAGE_URL_PATTERN = /\/api\/local-assets\/([a-f0-9]{24}\.(?:png|jpg|gif|webp|avif|bmp|svg|ico))(?:[?#][^\s)]*)?/g;
+const EXACT_STORED_IMAGE_URL_PATTERN = /^\/api\/local-assets\/([a-f0-9]{24}\.(?:png|jpg|gif|webp|avif|bmp|svg|ico))(?:[?#][^\s)]*)?$/;
+const STORED_IMAGE_ASSET_KEY_PATTERN = /^assets\/([a-f0-9]{24}\.(?:png|jpg|gif|webp|avif|bmp|svg|ico))$/;
 
-export function storedImageAssetKey(sectionId: string, fileName: string) {
-  return `assets/${sectionId}/${fileName}`;
+export const SVG_CONTENT_SECURITY_POLICY = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox";
+
+export function storedImageAssetKey(fileName: string) {
+  return `assets/${fileName}`;
 }
 
-export function storedImageAssetParts(assetKey: string) {
-  const match = /^assets\/([a-zA-Z0-9_-]{1,100})\/([a-f0-9]{24}\.(?:png|jpg|gif|webp|avif|bmp|svg|ico))$/.exec(assetKey);
-  return match ? { sectionId: match[1], fileName: match[2] } : null;
+export function storedImageAssetFileName(assetKey: string) {
+  return STORED_IMAGE_ASSET_KEY_PATTERN.exec(assetKey)?.[1] ?? null;
 }
 
 export function imageAssetKeysFromMarkdown(markdown: string) {
   const keys = new Set<string>();
-  for (const match of markdown.matchAll(STORED_IMAGE_URL_PATTERN)) keys.add(storedImageAssetKey(match[1], match[2]));
+  for (const match of markdown.matchAll(STORED_IMAGE_URL_PATTERN)) keys.add(storedImageAssetKey(match[1]));
   return [...keys];
 }
 
 export function imageAssetKeyFromUrl(url: string) {
   const match = EXACT_STORED_IMAGE_URL_PATTERN.exec(url);
-  return match ? storedImageAssetKey(match[1], match[2]) : null;
+  return match ? storedImageAssetKey(match[1]) : null;
 }
 
 export function imageAssetReferenceCounts(assetKeyGroups: Iterable<Iterable<string>>) {

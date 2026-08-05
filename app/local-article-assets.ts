@@ -22,14 +22,14 @@ function fileDataUrl(file: File) {
   });
 }
 
-export async function saveLocalArticleImage(sectionId: string, source: LocalImageSource) {
+export async function saveLocalArticleImage(source: LocalImageSource) {
   const image = typeof source === "string"
     ? source.startsWith("data:") ? { dataUrl: source } : { url: source }
     : { dataUrl: await fileDataUrl(source), name: source.name };
   const response = await fetch(ASSET_ENDPOINT, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ sectionId, image }),
+    body: JSON.stringify({ image }),
   });
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) throw new Error("本地图片文件服务未启用");

@@ -310,7 +310,7 @@ export function ArticleEditor({
     try {
       const markdownImages: string[] = [];
       for (const [index, source] of sources.entries()) {
-        const url = await saveLocalArticleImage(sectionId, source);
+        const url = await saveLocalArticleImage(source);
         uploadedAssetUrls.current.add(url);
         const rawLabel = source instanceof File ? source.name.replace(/\.[^.]+$/, "") : `图片 ${index + 1}`;
         const label = (rawLabel || "图片").replace(/\]/g, "\\]");
