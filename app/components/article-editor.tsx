@@ -35,7 +35,7 @@ export function ArticleEditor({
   sections: EditorSection[];
   initialValue: ArticleEditorValue;
   onCancel: () => void;
-  onSave: (value: ArticleEditorValue) => void;
+  onSave: (value: ArticleEditorValue) => void | Promise<void>;
   onDelete?: () => void;
 }) {
   const [sectionId, setSectionId] = useState(initialValue.sectionId);
@@ -52,6 +52,7 @@ export function ArticleEditor({
   const [tableRows, setTableRows] = useState(2);
   const [tableColumns, setTableColumns] = useState(3);
   const [pasteError, setPasteError] = useState("");
+  const [savingArticle, setSavingArticle] = useState(false);
   const [historyStatus, setHistoryStatus] = useState({ canUndo: false, canRedo: false });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const insertUrlRef = useRef<HTMLInputElement>(null);
@@ -324,15 +325,20 @@ export function ArticleEditor({
     updateMarkdown(next, currentSelection());
   };
 
-  const submit = () => {
+  const submit = async () => {
     if (!title.trim() || !summary.trim()) return;
-    onSave({
-      sectionId,
-      title: title.trim(),
-      summary: summary.trim(),
-      tags: tags.split(/[，,]/).map((tag) => tag.trim()).filter(Boolean),
-      markdown: markdownRef.current,
-    });
+    setSavingArticle(true);
+    try {
+      await onSave({
+        sectionId,
+        title: title.trim(),
+        summary: summary.trim(),
+        tags: tags.split(/[，,]/).map((tag) => tag.trim()).filter(Boolean),
+        markdown: markdownRef.current,
+      });
+    } finally {
+      setSavingArticle(false);
+    }
   };
 
   const indentSelection = (outdent: boolean) => {
@@ -422,6 +428,8 @@ export function ArticleEditor({
       indentSelection(false);
     }
   };
+
+  if (savingArticle) return <div className="content-loading-state" role="status">{"\u6B63\u5728\u4FDD\u5B58\u6587\u7AE0\u6B63\u6587\u2026"}</div>;
 
   return <div className="editor-page">
     <header className="editor-header">

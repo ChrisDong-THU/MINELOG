@@ -169,6 +169,8 @@ test("keeps navigation, rendering and local content storage in focused modules",
   assert.match(contentModel, /createSearchDocuments/);
   assert.match(contentModel, /export function articleMarkdownKey/);
   assert.match(page, /articleMarkdownKey\(target\.sectionId, target\.title\)/);
+  assert.match(editor, /savingArticle/);
+  assert.match(editor, /\\u6B63\\u5728\\u4FDD\\u5B58\\u6587\\u7AE0\\u6B63\\u6587\\u2026/);
   assert.doesNotMatch(page, /\$\{(?:sectionId|target\.sectionId)\}::/);
   assert.match(articleReader, /subsectionNumber = 0/);
   assert.match(articleReader, /toc-number/);
