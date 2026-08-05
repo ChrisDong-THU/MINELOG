@@ -7,7 +7,7 @@ import { handleR2ContentRequest, type R2BucketLike } from "./r2-content";
 interface Env {
   ASSETS: Fetcher;
   EDITOR_ACCESS_KEY?: string;
-  CONTENT_BUCKET: R2BucketLike;
+  CONTENT_BUCKET?: R2BucketLike;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -37,8 +37,10 @@ const worker = {
       });
     }
 
-    const storageResponse = await handleR2ContentRequest(request, env.CONTENT_BUCKET);
-    if (storageResponse) return storageResponse;
+    if (env.CONTENT_BUCKET) {
+      const storageResponse = await handleR2ContentRequest(request, env.CONTENT_BUCKET);
+      if (storageResponse) return storageResponse;
+    }
 
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];

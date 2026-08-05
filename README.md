@@ -18,7 +18,7 @@ MINELOG 是一个以 Minecraft 视觉语言构建的本地个人知识仓库，�
 - Rehype KaTeX、KaTeX
 - CSS、Tailwind CSS 基础样式
 - Vite 本地插件：Markdown 文件与文章图片资源读写
-- Cloudflare Workers + R2：线上文章、板块与图片对象存储
+- Vercel Functions + Cloudflare R2 S3 API：线上文章、板块与图片对象存储
 - ESLint、Node.js Test Runner
 
 ## 编辑密钥
@@ -31,9 +31,9 @@ MINELOG 是一个以 Minecraft 视觉语言构建的本地个人知识仓库，�
 项目采用双适配器方案，无需改变编辑界面：
 
 - 本地运行 `npm run dev` 时，由 Vite 插件读写 `content/local/` 与本地图片目录。
-- Sites/Cloudflare 生产环境通过 Worker 的同源 API 读写 R2 绑定 `CONTENT_BUCKET`。文章列表仅返回元数据，正文按打开或编辑时加载；图片使用内容哈希文件名和一年不可变缓存。
-- `.openai/hosting.json` 声明 `"r2": "CONTENT_BUCKET"`，发布时由 Sites 创建并绑定存储桶。
-- 生产环境必须把 `EDITOR_ACCESS_KEY` 配置为加密环境变量。修改密钥后需要重新部署，已有浏览器会话将在关闭浏览器后失效。
+- Vercel 生产环境通过同源 Route Handler 调用 Cloudflare R2 的 S3 兼容 API。文章列表仅返回元数据，正文按打开或编辑时加载；图片使用内容哈希文件名和一年不可变缓存。
+- Vercel 需要配置 `R2_ACCOUNT_ID`、`R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY`、`R2_BUCKET_NAME` 和 `EDITOR_ACCESS_KEY`，全部只保存在生产环境变量中。
+- R2 凭据应使用仅限指定桶的 Object Read & Write 权限；存储桶无需公开访问。修改密钥后需要重新部署。
 
 部署前执行：
 
@@ -42,4 +42,4 @@ npm.cmd run lint
 npm.cmd test
 ```
 
-不要把 `.env.local`、R2 凭据或真实编辑密钥提交到 Git。R2 不需要公开桶或单独的客户端访问密钥，所有读写都经过同域 Worker API。
+不要把 `.env.local`、R2 凭据或真实编辑密钥提交到 Git。R2 存储桶不公开，所有读写都经过 Vercel 的同域服务端接口。
