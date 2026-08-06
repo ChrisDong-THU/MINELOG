@@ -31,7 +31,34 @@
 
 <a id="interface-preview"></a>
 
-![MINELOG interface preview](./docs/assets/minelog.png)
+<p align="center">
+  <a href="./docs/assets/minelog.png">
+    <img width="100%" src="./docs/assets/minelog.png" alt="MINELOG home page">
+  </a>
+  <br>
+  <sub><b>Home</b> · Navigate your knowledge base through bookshelves, sections, and the hotbar.</sub>
+</p>
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <a href="./docs/assets/minelog_article.png">
+        <img src="./docs/assets/minelog_article.png" alt="MINELOG article reader">
+      </a>
+    </td>
+    <td width="50%" align="center">
+      <a href="./docs/assets/minelog_editor.png">
+        <img src="./docs/assets/minelog_editor.png" alt="MINELOG Markdown editor">
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Article Reader</b> · Focused reading with navigation and rendered Markdown.</sub></td>
+    <td align="center"><sub><b>Markdown Editor</b> · Write and preview without leaving the page.</sub></td>
+  </tr>
+</table>
+
+<p align="center"><sub>Click any preview to open the full-resolution screenshot.</sub></p>
 
 ## About MINELOG
 
