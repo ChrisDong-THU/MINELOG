@@ -8,6 +8,7 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { rehypeKatexSizingCompat } from "../katex-compat";
 import { markdownCodeLineRange, type MarkdownSourceRange } from "../markdown-source-range";
+import { remarkTyporaMath } from "../remark-typora-math";
 import { ResizableMarkdownImage } from "./resizable-markdown-image";
 
 type MarkdownComponents = ComponentProps<typeof ReactMarkdown>["components"];
@@ -35,7 +36,7 @@ function rehypeSourcePositions() {
   };
 }
 
-const REMARK_PLUGINS: NonNullable<ComponentProps<typeof ReactMarkdown>["remarkPlugins"]> = [remarkGfm, remarkMath];
+const REMARK_PLUGINS: NonNullable<ComponentProps<typeof ReactMarkdown>["remarkPlugins"]> = [remarkGfm, remarkMath, remarkTyporaMath];
 const BASE_REHYPE_PLUGINS: NonNullable<ComponentProps<typeof ReactMarkdown>["rehypePlugins"]> = [
   [rehypeHighlight, {
     aliases: {
