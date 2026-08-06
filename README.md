@@ -104,11 +104,9 @@ content/local/ 已被 Git 忽略。要迁移或备份本地知识库，请停止
 ## 线上数据与安全
 
 - 文章索引位于 R2 的 `state/article-index.json`，正文统一保存为 `articles/<文章 UUID>.json`。
-- 板块配置位于 `state/sections.json`，图片等附件统一保存为 `assets/<内容哈希>.<扩展名>`；文章和附件路径均不依赖板块。
+- 板块配置位于 `state/sections.json`，图片等附件统一保存为 `assets/<内容哈希>.<扩展名>`。
 - 阅读请求不需要编辑密钥；新建、修改、删除和上传资源必须通过密钥验证。
-- 验证成功后使用 HttpOnly、SameSite=Strict 的签名 Cookie 信任当前设备 5 天。
-- 连续失败 5 次会锁定 15 分钟。
-- SVG 可以上传，但响应带有限制脚本执行的 CSP 与 nosniff 头。
+- 验证成功后使用 HttpOnly、SameSite=Strict 的签名 Cookie 信任当前设备 5 天，连续验证失败 5 次会锁定 15 分钟。
 - 单篇 Markdown 上限 3 MB，单张图片上限 10 MB。
 - R2 凭据和编辑密钥仅存在于服务端环境变量中。
 
