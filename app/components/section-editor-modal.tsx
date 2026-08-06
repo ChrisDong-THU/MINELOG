@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Section } from "../content-types";
 import { availableSectionIcons, MINECRAFT_UI_ICONS } from "../minecraft-icons";
 import { GameModal } from "./game-modal";
+import { GameSelect } from "./game-select";
 
 export type EditableSection = Section;
 
@@ -77,15 +78,15 @@ export function SectionEditorModal({
     </>}
   >
     <div className="section-editor-form">
-      {mode === "edit" && <label className="section-editor-field">
+      {mode === "edit" && <div className="section-editor-field">
         <span>选择板块</span>
-        <span className="section-editor-select">
-          <img src={selected?.icon} alt="" />
-          <select value={sectionId} onChange={(event) => chooseSection(event.target.value)}>
-            {sections.map((section) => <option key={section.id} value={section.id}>{section.label}</option>)}
-          </select>
-        </span>
-      </label>}
+        <GameSelect
+          value={sectionId}
+          options={sections.map((section) => ({ value: section.id, label: section.label, icon: section.icon }))}
+          ariaLabel="选择板块"
+          onChange={chooseSection}
+        />
+      </div>}
 
       <fieldset className="section-icon-picker">
         <legend>板块图标</legend>

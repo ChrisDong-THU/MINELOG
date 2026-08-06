@@ -46,7 +46,7 @@ Windows PowerShell 如果限制 npm.ps1，可使用：
 打开终端显示的本地地址即可。本地模式具有以下行为：
 
 - 文章统一保存为 `content/local/articles/<文章 UUID>.md`，板块归属仅记录在文档元数据中。
-- 图片等附件统一保存在 `content/local/assets/<内容哈希>.<扩展名>`，不再创建板块子目录。
+- 图片等附件统一保存在 `content/local/assets/<内容哈希>.<扩展名>`。
 - 板块配置和初始化状态保存在 `content/local/state/`。
 - 浏览器本地状态会在首次运行时迁移到文件存储，重启后恢复。
 - 保存文章时会清理已不再被任何正文引用的本地文章图片。

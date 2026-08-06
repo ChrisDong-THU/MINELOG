@@ -728,10 +728,7 @@ export default function Home() {
         <span className="brand-icon-stack">
           <span className="brand-cube" />
           {__MINELOG_LOCAL_MODE__ && <span className="local-sync-off" title="本地模式：无云同步" aria-label="本地模式：无云同步">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path className="local-sync-off-cloud" d="M18.8 10.1A7 7 0 0 0 5.4 7.7 5.6 5.6 0 0 0 6 18.9h12.7a4.4 4.4 0 0 0 .1-8.8Z" />
-              <path className="local-sync-off-slash" d="M5 21 19 3" />
-            </svg>
+            <img src="/minecraft/ui/local-sync-off.png" alt="" aria-hidden="true" />
           </span>}
         </span>
         <strong>MINELOG</strong>
@@ -748,7 +745,7 @@ export default function Home() {
       {editing ? (editorInitialValue ? <ArticleEditor mode={editing.mode} sections={sections} initialValue={editorInitialValue} onCancel={closeEditor} onSave={saveArticle} onDelete={editing.mode === "edit" ? deleteArticle : undefined} onDirtyChange={handleEditorDirtyChange} /> : <div className="content-loading-state" role="status">正在载入文章正文…</div>) : readingSection && readingArticle ? (readingMarkdownReady ? <ArticleReader section={readingSection} article={readingArticle} markdown={articleMarkdown(readingArticle)} onBack={closeReader} /> : <div className="content-loading-state" role="status">正在载入文章正文…</div>) : <>
       {active === "home" && <div className="home-content">
         <div className="hero-copy">
-          <h1 className="hero-title"><img className="hero-title-image" src="/minecraft/ui/minelog-title.png" alt="MINELOG" /></h1>
+          <h1 className="hero-title"><img className="hero-title-image" src="/minecraft/ui/minelog-title.png" width={2048} height={299} alt="MINELOG" loading="eager" decoding="sync" fetchPriority="high" draggable={false} /></h1>
           <p className="tagline">矿脉日志：挖掘 &amp; 记录</p>
         </div>
         <div className="broadcast-grid">

@@ -15,6 +15,11 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="zh-CN"><body>{children}</body></html>;
+  return <html lang="zh-CN">
+    <head>
+      <link rel="preload" as="image" href="/minecraft/ui/minelog-title.png" fetchPriority="high" />
+    </head>
+    <body>{children}</body>
+  </html>;
 }
 

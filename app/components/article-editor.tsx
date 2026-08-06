@@ -5,8 +5,9 @@ import type { Section } from "../content-types";
 import { MINECRAFT_UI_ICONS } from "../minecraft-icons";
 import { saveLocalArticleImage } from "../local-article-assets";
 import { GameModal } from "./game-modal";
+import { GameSelect } from "./game-select";
 import { MarkdownEditorToolbar, type MarkdownEditorCommand, type MarkdownInsertKind } from "./markdown-editor-toolbar";
-import { MarkdownRenderer } from "./markdown-renderer";
+import { MarkdownRenderer, type MarkdownSourceRange } from "./markdown-renderer";
 
 export type ArticleEditorValue = {
   id: string;
@@ -24,6 +25,57 @@ type HistorySnapshot = EditorSelection & { value: string };
 type InsertDialog = MarkdownInsertKind | null;
 
 const STARTER_MARKDOWN = `## 从这里开始\n\n写下文章正文。编辑内容会在右侧实时渲染。\n\n> 可以使用标题、引用、列表、表格、代码块与 LaTeX 公式。\n`;
+
+function selectionCenterScrollTop(input: HTMLTextAreaElement, source: string, selection: EditorSelection) {
+  const style = getComputedStyle(input);
+  const lineHeight = Number.parseFloat(style.lineHeight) || Number.parseFloat(style.fontSize) * 1.75 || 22;
+  const endOffset = Math.max(selection.start, selection.end - 1);
+  const mirror = document.createElement("div");
+  const startMarker = document.createElement("span");
+  const endMarker = document.createElement("span");
+
+  Object.assign(mirror.style, {
+    position: "fixed",
+    inset: "0 auto auto -100000px",
+    visibility: "hidden",
+    pointerEvents: "none",
+    boxSizing: "border-box",
+    width: `${input.clientWidth}px`,
+    padding: style.padding,
+    fontFamily: style.fontFamily,
+    fontSize: style.fontSize,
+    fontStyle: style.fontStyle,
+    fontWeight: style.fontWeight,
+    lineHeight: style.lineHeight,
+    letterSpacing: style.letterSpacing,
+    wordSpacing: style.wordSpacing,
+    textIndent: style.textIndent,
+    textTransform: style.textTransform,
+    tabSize: style.tabSize,
+    whiteSpace: "pre-wrap",
+    overflowWrap: "break-word",
+    wordBreak: style.wordBreak,
+  });
+  for (const marker of [startMarker, endMarker]) {
+    marker.style.display = "inline-block";
+    marker.style.width = "0";
+    marker.style.height = `${lineHeight}px`;
+    marker.style.verticalAlign = "top";
+  }
+
+  mirror.append(
+    document.createTextNode(source.slice(0, selection.start)),
+    startMarker,
+    document.createTextNode(source.slice(selection.start, endOffset)),
+    endMarker,
+  );
+  document.body.append(mirror);
+  const selectionCenter = (startMarker.offsetTop + endMarker.offsetTop + lineHeight) / 2;
+  mirror.remove();
+
+  const maxScrollTop = Math.max(0, input.scrollHeight - input.clientHeight);
+  return Math.min(maxScrollTop, Math.max(0, selectionCenter - input.clientHeight / 2));
+}
 
 export function ArticleEditor({
   mode,
@@ -57,6 +109,7 @@ export function ArticleEditor({
   const [tableColumns, setTableColumns] = useState(3);
   const [pasteError, setPasteError] = useState("");
   const [savingArticle, setSavingArticle] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [historyStatus, setHistoryStatus] = useState({ canUndo: false, canRedo: false });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const insertUrlRef = useRef<HTMLInputElement>(null);
@@ -101,6 +154,33 @@ export function ArticleEditor({
       input.focus();
       input.setSelectionRange(start, end);
     });
+  };
+
+  const focusMarkdownSource = ({ start, end }: MarkdownSourceRange) => {
+    const source = markdownRef.current;
+    const selectionStart = Math.min(Math.max(0, start), source.length);
+    const selection = {
+      start: selectionStart,
+      end: Math.min(Math.max(selectionStart, end), source.length),
+    };
+    selectionRef.current = selection;
+    setMobilePane("edit");
+
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const input = textareaRef.current;
+      if (!input) return;
+      input.focus({ preventScroll: true });
+      input.setSelectionRange(selection.start, selection.end);
+
+      const top = selectionCenterScrollTop(input, source, selection);
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      input.scrollTo({ top, behavior: reducedMotion ? "auto" : "smooth" });
+
+      const bounds = input.getBoundingClientRect();
+      if (bounds.top < 0 || bounds.bottom > window.innerHeight) {
+        input.scrollIntoView({ block: "center", behavior: reducedMotion ? "auto" : "smooth" });
+      }
+    }));
   };
 
   const updateMarkdown = (
@@ -343,7 +423,10 @@ export function ArticleEditor({
   };
 
   const submit = async () => {
-    if (!title.trim() || !summary.trim()) return;
+    if (!title.trim() || !summary.trim()) {
+      setDetailsOpen(true);
+      return;
+    }
     setSavingArticle(true);
     try {
       await onSave({
@@ -482,33 +565,54 @@ export function ArticleEditor({
     </div>
 
     <div className={`editor-workspace pane-${mobilePane}`}>
-      <div className="editor-form-column">
-      <section className="editor-form" aria-label="文章内容编辑">
-        <div className="editor-field-grid">
-          <label className="editor-field">
-            <span>归属板块</span>
-            <span className="editor-select-wrap">
-              <img src={selectedSection?.icon} alt="" />
-              <select value={sectionId} onChange={(event) => setSectionId(event.target.value)}>
-                {sections.map((section) => <option key={section.id} value={section.id}>{section.label}</option>)}
-              </select>
-            </span>
-          </label>
-          <label className="editor-field">
-            <span>文章标签</span>
-            <input value={tags} onChange={(event) => setTags(event.target.value)} placeholder="例如：RAG，性能" />
-          </label>
+      <div className={`editor-form-column${detailsOpen ? " is-meta-open" : " is-meta-collapsed"}`}>
+      <section className={`editor-meta-panel${detailsOpen ? " is-open" : ""}`} aria-label="文章基本信息">
+        <button
+          type="button"
+          className="editor-meta-toggle"
+          aria-expanded={detailsOpen}
+          aria-controls="article-editor-details"
+          onClick={() => setDetailsOpen((open) => !open)}
+        >
+          <img src={selectedSection?.icon} alt="" />
+          <span className="editor-meta-button-copy">
+            <small>ARTICLE DETAILS</small>
+            <strong>文章基本信息</strong>
+          </span>
+          <span className="editor-meta-button-summary">{title.trim() || "设置板块、标题、副标题与标签"}</span>
+          <i className="editor-meta-chevron" aria-hidden="true" />
+        </button>
+        <div id="article-editor-details" className="editor-meta-body" aria-hidden={!detailsOpen} inert={!detailsOpen}>
+          <div className="editor-meta-body-inner">
+            <div className="editor-meta-fields">
+              <div className="editor-field-grid">
+                <div className="editor-field">
+                  <span>归属板块</span>
+                  <GameSelect
+                    value={sectionId}
+                    options={sections.map((section) => ({ value: section.id, label: section.label, icon: section.icon }))}
+                    ariaLabel="归属板块"
+                    size="compact"
+                    onChange={setSectionId}
+                  />
+                </div>
+                <label className="editor-field">
+                  <span>文章标签</span>
+                  <input value={tags} onChange={(event) => setTags(event.target.value)} placeholder="例如：RAG，性能" />
+                </label>
+              </div>
+              <label className="editor-field">
+                <span>文章大标题</span>
+                <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="输入文章标题" />
+              </label>
+              <label className="editor-field">
+                <span>文章副标题</span>
+                <input value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="用一句话说明这篇文章" />
+              </label>
+            </div>
+          </div>
         </div>
-        <label className="editor-field">
-          <span>文章大标题</span>
-          <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="输入文章标题" />
-        </label>
-        <label className="editor-field">
-          <span>文章副标题</span>
-          <input value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="用一句话说明这篇文章" />
-        </label>
-
-        </section>
+      </section>
 
         <section className="editor-markdown-panel" aria-label="Markdown editor">
           <div className="editor-markdown-field">
@@ -545,6 +649,7 @@ export function ArticleEditor({
           markdown={markdown}
           editableImages
           onImageWidthChange={updateImageWidth}
+          onSourceActivate={focusMarkdownSource}
         />
       </section>
     </div>

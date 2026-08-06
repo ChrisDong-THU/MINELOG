@@ -45,21 +45,127 @@
   gap: 14px;
   min-width: 0;
 }
-.editor-form {
-  display: grid;
-  gap: 13px;
-  padding: 18px;
+.editor-meta-panel {
+  overflow: clip;
   border: 1px solid rgba(213, 223, 208, .22);
   background: rgba(8, 12, 10, .86);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .035), 6px 7px rgba(0, 0, 0, .24);
   backdrop-filter: blur(8px);
 }
+
+.editor-meta-toggle {
+  width: 100%;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: 28px max-content minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 16px;
+  border: 0;
+  color: #eff2e9;
+  background: linear-gradient(90deg, rgba(42, 51, 35, .62), rgba(13, 18, 15, .34));
+  cursor: pointer;
+  text-align: left;
+  transition: background .2s ease, box-shadow .2s ease;
+}
+
+.editor-meta-toggle:hover {
+  background: linear-gradient(90deg, rgba(61, 73, 45, .7), rgba(18, 25, 20, .42));
+}
+
+.editor-meta-toggle:focus-visible {
+  outline: 1px solid rgba(190, 239, 99, .82);
+  outline-offset: -3px;
+}
+
+.editor-meta-toggle > img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.editor-meta-button-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.editor-meta-button-copy small {
+  color: #b9ed61;
+  font: 7px/1.1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .16em;
+}
+
+.editor-meta-button-copy strong {
+  font: 11px/1.2 var(--font-pixel), sans-serif;
+  letter-spacing: .04em;
+}
+
+.editor-meta-button-summary {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(221, 227, 216, .62);
+  font: 9px/1.4 var(--font-pixel), sans-serif;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-meta-chevron {
+  width: 9px;
+  height: 9px;
+  justify-self: end;
+  border-right: 2px solid rgba(190, 239, 99, .78);
+  border-bottom: 2px solid rgba(190, 239, 99, .78);
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform .3s cubic-bezier(.2, .8, .2, 1);
+}
+
+.editor-meta-panel.is-open .editor-meta-toggle {
+  background: linear-gradient(90deg, rgba(49, 59, 39, .68), rgba(13, 18, 15, .38));
+  box-shadow: inset 0 -1px rgba(213, 223, 208, .14);
+}
+
+.editor-meta-panel.is-open .editor-meta-chevron {
+  transform: translateY(2px) rotate(225deg);
+}
+
+.editor-meta-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(-5px);
+  transition:
+    grid-template-rows .32s cubic-bezier(.2, .8, .2, 1),
+    opacity .2s ease,
+    transform .32s cubic-bezier(.2, .8, .2, 1),
+    visibility 0s linear .32s;
+}
+
+.editor-meta-panel.is-open .editor-meta-body {
+  grid-template-rows: 1fr;
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 0s;
+}
+
+.editor-meta-body-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.editor-meta-fields {
+  display: grid;
+  gap: 13px;
+  padding: 17px 18px 18px;
+}
 .editor-field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
 .editor-field { display: grid; gap: 7px; min-width: 0; }
 .editor-field > span:first-child,
 .editor-markdown-heading > span { color: #98a28f; font: 8px ui-monospace, monospace; letter-spacing: .1em; }
-.editor-field input,
-.editor-field select {
+.editor-field input {
   width: 100%;
   height: 40px;
   min-width: 0;
@@ -73,12 +179,7 @@
 }
 .editor-field input { padding: 0 11px; }
 .editor-field input::placeholder { color: #6f786d; }
-.editor-field input:focus,
-.editor-field select:focus { border-color: rgba(185, 237, 97, .62); box-shadow: inset 0 -2px rgba(185, 237, 97, .25); }
-.editor-select-wrap { position: relative; display: block; }
-.editor-select-wrap img { position: absolute; z-index: 2; top: 8px; left: 9px; width: 24px; height: 24px; image-rendering: pixelated; pointer-events: none; }
-.editor-select-wrap select { padding: 0 30px 0 40px; appearance: none; cursor: pointer; }
-.editor-select-wrap::after { content: ""; position: absolute; top: 15px; right: 12px; width: 7px; height: 7px; border-right: 2px solid #aeb8aa; border-bottom: 2px solid #aeb8aa; pointer-events: none; transform: rotate(45deg); }
+.editor-field input:focus { border-color: rgba(185, 237, 97, .62); box-shadow: inset 0 -2px rgba(185, 237, 97, .25); }
 
 .editor-markdown-panel {
   position: sticky;
@@ -153,6 +254,10 @@
   color: #dce3d9;
   font: 13px/1.75 Consolas, "SFMono-Regular", ui-monospace, monospace;
   tab-size: 2;
+  transition: height .32s cubic-bezier(.2, .8, .2, 1), border-color .2s ease;
+}
+.editor-form-column.is-meta-collapsed .editor-markdown-field textarea {
+  height: clamp(430px, 66dvh, 700px);
 }
 .editor-markdown-field textarea:focus { border-color: rgba(185, 237, 97, .5); }
 
@@ -167,6 +272,9 @@
 }
 .editor-preview-header h2 { margin: 0; font-size: clamp(22px, 2.5vw, 34px); font-weight: 500; line-height: 1.3; }
 .editor-preview-header p { margin: 8px 0 0; color: #bec5bc; font-size: 10px; }
+
+.editor-preview .is-source-navigable { cursor: text; }
+.editor-preview .is-source-navigable :is(a, button, input, textarea, select) { cursor: pointer; }
 .editor-preview .reader-paper { width: 100%; min-height: 600px; box-shadow: 7px 8px rgba(0, 0, 0, .25); }
 .editor-mobile-tabs { display: none; }
 
@@ -211,6 +319,7 @@
   .editor-form-column { align-self: start; }
   .editor-markdown-panel { position: static; max-height: none; }
   .editor-markdown-field textarea { max-height: 70dvh; }
+  .editor-form-column.is-meta-collapsed .editor-markdown-field textarea { height: min(64dvh, 620px); }
 }
 @media (max-width: 620px) {
   .editor-page { width: min(100% - 18px, 820px); padding-top: 70px; }
@@ -218,14 +327,24 @@
   .editor-actions { display: grid; grid-template-columns: 1fr 1fr; }
   .editor-delete-button { grid-column: 1 / -1; }
   .editor-field-grid { grid-template-columns: 1fr; }
-  .editor-form,
+  .editor-meta-toggle { grid-template-columns: 24px minmax(0, 1fr) 14px; padding: 10px 13px; }
+  .editor-meta-toggle > img { width: 24px; height: 24px; }
+  .editor-meta-button-summary { display: none; }
+  .editor-meta-fields,
   .editor-markdown-panel { padding: 14px; }
   .editor-format-bar { padding: 4px; }
   .editor-tool-group { padding: 0 3px; }
   .editor-tool-button { width: 29px; height: 29px; padding: 6px; }
   .editor-markdown-field textarea { height: 440px; min-height: 320px; max-height: 70dvh; padding: 13px; font-size: 12px; }
+  .editor-form-column.is-meta-collapsed .editor-markdown-field textarea { height: min(64dvh, 560px); min-height: 380px; }
   .editor-preview .reader-paper { min-height: 480px; }
   .editor-insert-hint { display: none; }
   .editor-insert-actions { width: 100%; }
   .editor-insert-actions button { flex: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-meta-body,
+  .editor-meta-chevron,
+  .editor-markdown-field textarea { transition: none; }
 }

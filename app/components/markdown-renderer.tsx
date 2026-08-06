@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, type ComponentProps } from "react";
+import { useEffect, useMemo, useRef, type ComponentProps, type MouseEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
@@ -9,8 +9,32 @@ import { rehypeKatexSizingCompat } from "../katex-compat";
 import { ResizableMarkdownImage } from "./resizable-markdown-image";
 
 type MarkdownComponents = ComponentProps<typeof ReactMarkdown>["components"];
+export type MarkdownSourceRange = { start: number; end: number };
+type PositionedHastNode = {
+  type?: string;
+  position?: { start?: { offset?: number }; end?: { offset?: number } };
+  properties?: Record<string, unknown>;
+  children?: PositionedHastNode[];
+};
+
+function rehypeSourcePositions() {
+  return (tree: PositionedHastNode) => {
+    const visit = (node: PositionedHastNode) => {
+      const start = node.position?.start?.offset;
+      const end = node.position?.end?.offset;
+      if (node.type === "element" && typeof start === "number" && typeof end === "number") {
+        node.properties ??= {};
+        node.properties["data-source-start"] = start;
+        node.properties["data-source-end"] = end;
+      }
+      node.children?.forEach(visit);
+    };
+    visit(tree);
+  };
+}
+
 const REMARK_PLUGINS: NonNullable<ComponentProps<typeof ReactMarkdown>["remarkPlugins"]> = [remarkGfm, remarkMath];
-const REHYPE_PLUGINS: NonNullable<ComponentProps<typeof ReactMarkdown>["rehypePlugins"]> = [rehypeKatex, rehypeKatexSizingCompat];
+const BASE_REHYPE_PLUGINS: NonNullable<ComponentProps<typeof ReactMarkdown>["rehypePlugins"]> = [rehypeKatex, rehypeKatexSizingCompat];
 
 export function MarkdownRenderer({
   markdown,
@@ -18,14 +42,20 @@ export function MarkdownRenderer({
   className = "",
   editableImages = false,
   onImageWidthChange,
+  onSourceActivate,
 }: {
   markdown: string;
   components?: MarkdownComponents;
   className?: string;
   editableImages?: boolean;
   onImageWidthChange?: (src: string, width: number) => void;
+  onSourceActivate?: (range: MarkdownSourceRange) => void;
 }) {
   const rootRef = useRef<HTMLElement>(null);
+  const rehypePlugins = useMemo<NonNullable<ComponentProps<typeof ReactMarkdown>["rehypePlugins"]>>(
+    () => onSourceActivate ? [rehypeSourcePositions, ...BASE_REHYPE_PLUGINS] : BASE_REHYPE_PLUGINS,
+    [onSourceActivate],
+  );
   const markdownComponents = useMemo<MarkdownComponents>(() => ({
     a: ({ href, children, ...props }) => <a href={href} target={href?.startsWith("http") ? "_blank" : undefined} rel={href?.startsWith("http") ? "noreferrer" : undefined} {...props}>{children}</a>,
     img: ({ alt, src, ...props }) => {
@@ -93,10 +123,27 @@ export function MarkdownRenderer({
     };
   }, [markdown]);
 
-  return <article ref={rootRef} className={`reader-paper markdown-body science-article ${className}`.trim()}>
+  const handleDoubleClick = (event: MouseEvent<HTMLElement>) => {
+    if (!onSourceActivate || !(event.target instanceof Element)) return;
+    if (event.target.closest("a, button, input, textarea, select")) return;
+    const source = event.target.closest<HTMLElement>("[data-source-start][data-source-end]");
+    if (!source || !rootRef.current?.contains(source)) return;
+    const start = Number(source.dataset.sourceStart);
+    const end = Number(source.dataset.sourceEnd);
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start) return;
+    event.preventDefault();
+    onSourceActivate({ start, end });
+  };
+
+  const sourceClassName = onSourceActivate ? " is-source-navigable" : "";
+  return <article
+    ref={rootRef}
+    className={`reader-paper markdown-body science-article ${className}${sourceClassName}`.trim()}
+    onDoubleClick={handleDoubleClick}
+  >
     <ReactMarkdown
       remarkPlugins={REMARK_PLUGINS}
-      rehypePlugins={REHYPE_PLUGINS}
+      rehypePlugins={rehypePlugins}
       components={markdownComponents}
     >{markdown}</ReactMarkdown>
   </article>;

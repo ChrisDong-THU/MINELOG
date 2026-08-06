@@ -95,14 +95,8 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--lime); outline-
   filter: drop-shadow(1px 2px 0 rgba(0,0,0,.75));
   pointer-events: none;
 }
-.local-sync-off svg { display: block; width: 100%; height: 100%; overflow: visible; }
-.local-sync-off-cloud { fill: #2f8cff; }
-.local-sync-off-slash {
-  fill: none;
-  stroke: #3158ec;
-  stroke-width: 2.8;
-  stroke-linecap: round;
-}
+.local-sync-off img { display: block; width: 100%; height: 100%; object-fit: contain; }
+
 .brand-cube {
   display: block;
   width: 29px;
@@ -835,12 +829,93 @@ html[data-page-direction="backward"]::view-transition-new(page-content) { animat
 .slot-usage b { color: var(--lime); font-size: 13px; }
 .modal-done { min-width: 92px; }
 .pixel-button:disabled { opacity: .38; cursor: not-allowed; transform: none; }
+.game-select {
+  --game-select-height: 46px;
+  --game-select-icon: 28px;
+  position: relative;
+  min-width: 0;
+  border: 1px solid rgba(210,222,205,.22);
+  border-top-color: rgba(222,231,217,.4);
+  border-left-color: rgba(174,190,164,.34);
+  background: linear-gradient(90deg,rgba(92,111,80,.18),transparent 44%),rgba(3,7,5,.84);
+  box-shadow: inset 0 1px rgba(255,255,255,.035), 3px 4px rgba(0,0,0,.25);
+  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
+}
+.game-select--compact { --game-select-height: 40px; --game-select-icon: 24px; }
+.game-select:hover { border-color: rgba(194,214,181,.5); background-color: rgba(14,22,15,.88); }
+.game-select:focus-within,
+.game-select.is-open { border-color: rgba(185,237,97,.62); box-shadow: inset 0 -2px rgba(185,237,97,.2), 3px 4px rgba(0,0,0,.28); }
+.game-select__trigger {
+  width: 100%;
+  min-height: var(--game-select-height);
+  display: grid;
+  grid-template-columns: var(--game-select-icon) minmax(0,1fr) 15px;
+  align-items: center;
+  gap: 11px;
+  padding: 7px 14px 7px 10px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #eef2ea;
+  font: 11px var(--font);
+  text-align: left;
+  cursor: pointer;
+}
+.game-select__trigger:focus-visible { outline: 1px solid rgba(190,239,99,.82); outline-offset: -3px; }
+.game-select__trigger:disabled { opacity: .42; cursor: default; }
+.game-select__trigger > img,
+.game-select__options img { width: var(--game-select-icon); height: var(--game-select-icon); object-fit: contain; image-rendering: pixelated; filter: drop-shadow(2px 2px rgba(0,0,0,.62)); }
+.game-select__trigger > span { min-width: 0; padding-left: 11px; overflow: hidden; border-left: 1px solid rgba(202,215,194,.14); text-overflow: ellipsis; white-space: nowrap; }
+.game-select__trigger > i { width: 8px; height: 8px; justify-self: end; border-right: 2px solid #aeb8aa; border-bottom: 2px solid #aeb8aa; transform: translateY(-2px) rotate(45deg); transition: border-color .18s ease, transform .3s cubic-bezier(.2,.8,.2,1); }
+.game-select.is-open .game-select__trigger > i { border-color: var(--lime); transform: translateY(2px) rotate(225deg); }
+.game-select__popup {
+  --game-select-icon: 28px;
+  position: fixed;
+  z-index: 11000;
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  opacity: 0;
+  border: 1px solid rgba(210,222,205,.3);
+  border-top-color: rgba(222,231,217,.45);
+  background: rgba(5,9,6,.96);
+  box-shadow: inset 0 1px rgba(255,255,255,.035), 5px 6px rgba(0,0,0,.34);
+  pointer-events: none;
+  transform: translateY(-5px);
+  transition: grid-template-rows .26s cubic-bezier(.2,.8,.2,1), opacity .16s ease, transform .26s cubic-bezier(.2,.8,.2,1), visibility 0s linear .26s;
+}
+.game-select__popup--compact { --game-select-icon: 24px; }
+.game-select__popup.is-up { transform: translateY(5px); }
+.game-select__popup.is-open { grid-template-rows: 1fr; visibility: visible; opacity: 1; pointer-events: auto; transform: translateY(0); transition-delay: 0s; }
+.game-select__popup-inner { min-height: 0; overflow: hidden; }
+.game-select__options { max-height: min(220px,36vh); padding: 5px; overflow-y: auto; border-top: 1px solid rgba(213,223,208,.14); background: rgba(5,9,6,.74); scrollbar-width: thin; scrollbar-color: #65725d rgba(3,7,5,.52); }
+.game-select__options > button {
+  width: 100%;
+  min-height: 40px;
+  display: grid;
+  grid-template-columns: var(--game-select-icon) minmax(0,1fr) 18px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 9px;
+  border: 0;
+  border-bottom: 1px solid rgba(205,217,198,.08);
+  background: transparent;
+  color: #ccd4c9;
+  font: 10px var(--font);
+  text-align: left;
+  cursor: pointer;
+  transition: color .14s ease, background-color .14s ease;
+}
+.game-select__options > button:last-child { border-bottom: 0; }
+.game-select__options > button:hover,
+.game-select__options > button.is-active { background: linear-gradient(90deg,rgba(185,237,97,.13),rgba(185,237,97,.025)); color: #f0f5eb; }
+.game-select__options > button[aria-selected="true"] { color: #dff6b5; }
+.game-select__options > button > i { justify-self: center; color: var(--lime); font: 11px/1 ui-monospace,monospace; }
 .section-editor-form { display: grid; gap: 16px; padding: 18px; }
 .section-editor-field { display: grid; gap: 7px; min-width: 0; }
 .section-editor-field > span:first-child,
 .section-icon-picker legend { color: #98a28f; font: 8px ui-monospace,monospace; letter-spacing: .1em; }
-.section-editor-field input,
-.section-editor-field select {
+.section-editor-field input {
   width: 100%;
   height: 42px;
   min-width: 0;
@@ -854,42 +929,7 @@ html[data-page-direction="backward"]::view-transition-new(page-content) { animat
 }
 .section-editor-field input { padding: 0 12px; }
 .section-editor-field input::placeholder { color: #6f786d; }
-.section-editor-field input:focus,
-.section-editor-field select:focus { border-color: rgba(185,237,97,.62); box-shadow: inset 0 -2px rgba(185,237,97,.25); }
-.section-editor-select {
-  position: relative;
-  display: block;
-  height: 46px;
-  overflow: hidden;
-  border: 1px solid rgba(210,222,205,.22);
-  border-top-color: rgba(222,231,217,.4);
-  border-left-color: rgba(174,190,164,.34);
-  background: linear-gradient(90deg,rgba(92,111,80,.18),transparent 44%),rgba(3,7,5,.84);
-  box-shadow: inset 0 1px rgba(255,255,255,.035), 3px 4px rgba(0,0,0,.25);
-  transition: border-color .16s ease, background-color .16s ease, box-shadow .16s ease;
-}
-.section-editor-select::before { content: ""; position: absolute; z-index: 2; top: 8px; bottom: 8px; left: 47px; width: 1px; background: rgba(202,215,194,.14); pointer-events: none; }
-.section-editor-select img { position: absolute; z-index: 2; top: 8px; left: 10px; width: 28px; height: 28px; image-rendering: pixelated; filter: drop-shadow(2px 2px rgba(0,0,0,.62)); pointer-events: none; }
-.section-editor-select select {
-  position: relative;
-  z-index: 1;
-  height: 100%;
-  padding: 0 50px 0 58px;
-  border: 0;
-  appearance: none;
-  color-scheme: dark;
-  background: transparent;
-  color: #eef2ea;
-  font-size: 12px;
-  letter-spacing: .025em;
-  cursor: pointer;
-}
-.section-editor-select select:focus { border: 0; box-shadow: none; }
-.section-editor-select select option { background: #111713; color: #e9eee6; }
-.section-editor-select::after { content: ""; position: absolute; z-index: 2; top: 16px; right: 17px; width: 8px; height: 8px; border-right: 2px solid #aeb8aa; border-bottom: 2px solid #aeb8aa; pointer-events: none; transform: rotate(45deg); transition: border-color .16s ease, transform .16s ease; }
-.section-editor-select:hover { border-color: rgba(194,214,181,.5); background-color: rgba(14,22,15,.88); }
-.section-editor-select:focus-within { border-color: rgba(185,237,97,.62); box-shadow: inset 0 -2px rgba(185,237,97,.24), 3px 4px rgba(0,0,0,.28); }
-.section-editor-select:focus-within::after { border-color: var(--lime); }
+.section-editor-field input:focus { border-color: rgba(185,237,97,.62); box-shadow: inset 0 -2px rgba(185,237,97,.25); }
 .section-icon-picker { min-width: 0; margin: 0; padding: 0; border: 0; }
 .section-icon-picker legend { margin-bottom: 8px; padding: 0; }
 .section-icon-picker > div {
@@ -1450,4 +1490,9 @@ html[data-page-direction="backward"]::view-transition-new(page-content) {
   color: rgba(230, 236, 222, .7);
   font-size: 13px;
   letter-spacing: .12em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-select__popup,
+  .game-select__trigger > i { transition: none; }
 }
