@@ -1,139 +1,181 @@
-# MINELOG
+<p align="center">
+  <img width="48%" src="./public/minecraft/ui/minelog-title.png" alt="MINELOG">
+</p>
 
-MINELOG 是一个采用 Minecraft 视觉语言的个人知识库，适合整理技术笔记、论文阅读记录和长期知识档案。
+<h1 align="center">MINELOG</h1>
 
-同一套界面支持两种持久化方式：
+<p align="center">
+  Write knowledge into a world of blocks. A self-hosted personal knowledge base inspired by Minecraft.
+</p>
 
-- 本地模式：内容直接写入项目目录中的 Markdown 和资源文件，适合个人电脑、离线使用与完整备份。
-- 线上模式：Vercel 承载应用和同源 API，Cloudflare R2 私有桶保存板块、文章和图片，适合跨设备访问。
+<div align="center">
 
-## 技术结构
+[![Node.js](https://img.shields.io/badge/Node.js-22.x-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![React](https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![GPLv3](https://img.shields.io/badge/License-GPLv3-4C1?logo=gnu&logoColor=white)](./LICENSE)
+[![Storage](https://img.shields.io/badge/Storage-Local%20%7C%20Cloudflare%20R2-F38020?logo=cloudflare&logoColor=white)](#data-storage)
 
-| 目录 | 用途 |
-| --- | --- |
-| app/ | 页面、组件、编辑器、阅读器和客户端数据模型 |
-| app/api/ | Vercel Route Handler，负责鉴权并转发线上存储请求 |
-| build/ | 本地开发模式的 Vite 文件存储插件 |
-| shared/ | 本地与线上共同使用的鉴权、图片格式和安全规则 |
-| server/ | Vercel 访问 R2 S3 API 的服务端适配器 |
-| worker/ | 统一的 R2 内容接口及 Vinext Worker 入口 |
-| tests/ | 鉴权、存储、渲染与回归测试 |
-| public/ | 字体和 Minecraft 界面资源；物品图标路径由代码动态生成 |
+</div>
 
-文章和图片通过相同的浏览器接口读写，运行模式只在服务端适配层切换。R2 桶无需公开，也不需要配置公开开发 URL。
+<p align="center">
+  English | <a href="./docs/README_zh.md">简体中文</a>
+</p>
 
-## 环境要求
+<p align="center">
+  <a href="#interface-preview">Interface</a> ·
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#deploy-to-vercel">Deployment</a> ·
+  <a href="#contributing">Contributing</a>
+</p>
+
+<a id="interface-preview"></a>
+
+![MINELOG interface preview](./docs/assets/minelog.png)
+
+## About MINELOG
+
+MINELOG is built for technical notes, research reading logs, and long-term knowledge archives. It brings Minecraft-inspired bookshelves, items, and pixel UI into a responsive web application with a complete Markdown writing experience.
+
+The same interface supports both local files and cloud object storage. Use it as a fully offline personal notebook that is easy to back up, or deploy it to Vercel and access the same knowledge base across devices through Cloudflare R2.
+
+## Features
+
+- **An immersive knowledge base** — Organize sections and articles with bookshelves, blocks, hotbar items, and pixel-style motion on desktop and mobile.
+- **A complete Markdown workflow** — Write with live preview, a formatting toolbar, GFM tables and task lists, syntax highlighting, math rendering, image uploads, and drag-to-resize images.
+- **Flexible organization** — Create custom sections, rearrange hotbar entries, and edit article metadata.
+- **Local and cloud modes** — Read and write Markdown files during local development, or use a same-origin Vercel API backed by a private R2 bucket.
+- **Protected editing** — Keep reading public while requiring an editor access key for every write operation.
+
+## Quick Start
+
+### Requirements
 
 - Node.js 22.x
 - npm
-- 本地模式不需要 Cloudflare 或 Vercel 账号
-- 线上模式需要 Vercel 项目、Cloudflare R2 桶和桶级 S3 凭据
 
-安装依赖：
+### Install and run
 
-    npm install
+```shell
+git clone https://github.com/ChrisDong-THU/MINELOG.git
+cd MINELOG
+npm install
+npm run dev
+```
 
-Windows PowerShell 如果限制 npm.ps1，可使用：
+Open the local URL printed in the terminal. Local development requires no Vercel or Cloudflare account and no environment variables.
 
-    npm.cmd install
+Build and run a local production version:
 
-## 本地运行与恢复
+```shell
+npm run build
+npm run start
+```
 
-启动开发服务器：
+## Data Storage
 
-    npm run dev
+### Local mode
 
-打开终端显示的本地地址即可。本地模式具有以下行为：
+Running `npm run dev` enables the local file adapter:
 
-- 文章统一保存为 `content/local/articles/<文章 UUID>.md`，板块归属仅记录在文档元数据中。
-- 图片等附件统一保存在 `content/local/assets/<内容哈希>.<扩展名>`。
-- 板块配置和初始化状态保存在 `content/local/state/`。
-- 浏览器本地状态会在首次运行时迁移到文件存储，重启后恢复。
-- 保存文章时会清理已不再被任何正文引用的本地文章图片。
+```text
+content/local/
+├─ articles/    # <article UUID>.md
+├─ assets/      # Images and attachments keyed by content hash
+└─ state/       # Section configuration and initialization state
+```
 
-content/local/ 已被 Git 忽略。要迁移或备份本地知识库，请停止开发服务器后完整复制该目录；恢复时把目录放回项目同一位置再启动。
+`content/local/` is ignored by Git. To back up or move your knowledge base, stop the development server and copy the entire directory. Restore it to the same location before restarting MINELOG.
 
-本地生产构建与启动：
+### Cloud mode
 
-    npm run build
-    npm run start
+Production deployments use Vercel for the application and same-origin API, with a private Cloudflare R2 bucket for persistent data:
 
-## 线上部署：Vercel + Cloudflare R2
+```text
+R2 bucket
+├─ state/article-index.json
+├─ state/sections.json
+├─ articles/<article UUID>.json
+└─ assets/<content hash>.<extension>
+```
 
-### 1. 创建私有 R2 桶
+The R2 bucket does not need a public domain or Public Development URL. Every object is accessed by the server through the S3 API.
 
-在 Cloudflare 控制台进入 R2 Object Storage，创建一个桶，例如 minelog-content。保持 Public Development URL 和自定义公开域名关闭；应用通过服务端 S3 API 访问该桶。
+## Deploy to Vercel
 
-### 2. 创建最小权限凭据
+### 1. Create a Cloudflare R2 bucket
 
-从 R2 概览页进入 Manage R2 API Tokens，建议设置：
+Create a private R2 bucket and generate S3 credentials with **Object Read & Write** access scoped only to that bucket. Never commit an access key, secret key, or editor key.
 
-- Permissions：Object Read & Write。
-- Specify bucket：只选择本项目使用的桶。
-- TTL：按维护策略设置；长期部署可不设到期时间，但应定期轮换。
-- Client IP filtering：Vercel 出口 IP 不固定时留空。
-- 其余账号和桶权限不要额外授予。
+### 2. Configure environment variables
 
-创建后只会完整显示一次 Access Key ID 和 Secret Access Key。将它们放入本地忽略文件或 Vercel 加密环境变量，不要粘贴到提交记录。
+Use [`.env.example`](./.env.example) as the source of required Vercel environment variables.
 
-### 3. 配置环境变量
+### 3. Import and deploy
 
-复制 .env.example 为 .env.local 可在本机验证线上配置；真实值不要提交。Vercel 项目至少需要：
+1. Import the repository into Vercel.
+2. Select **Other** as the Framework Preset.
+3. Select **22.x** as the Node.js version.
+4. Add the variables from `.env.example` and deploy.
 
-| 变量 | 说明 |
+[`vercel.json`](./vercel.json) configures the production build command as `npm run build:vercel`.
+
+> [!IMPORTANT]
+> R2 is the only source of truth for cloud data. Back up the entire bucket with an S3-compatible tool and always preserve `state/`, `articles/`, and `assets/` together.
+
+## Project Structure
+
+| Directory | Description |
 | --- | --- |
-| EDITOR_ACCESS_KEY | 6 位数字的编辑密钥 |
-| R2_ACCOUNT_ID | Cloudflare Account ID |
-| R2_ACCESS_KEY_ID | R2 S3 Access Key ID |
-| R2_SECRET_ACCESS_KEY | R2 S3 Secret Access Key |
-| R2_BUCKET_NAME | R2 桶名 |
-| R2_ENDPOINT | 可选；仅特殊区域端点需要 |
+| [`app/`](./app) | Pages, components, Markdown editor, and reader |
+| [`app/api/`](./app/api) | Vercel Route Handler and editor authentication entry point |
+| [`build/`](./build) | File-storage plugins used by local development |
+| [`server/`](./server) | Server-side Cloudflare R2 S3 adapter |
+| [`shared/`](./shared) | Authentication, asset, and security rules shared by both modes |
+| [`worker/`](./worker) | Unified content API and Vinext Worker entry point |
+| [`tests/`](./tests) | Authentication, storage, rendering, and regression tests |
+| [`public/`](./public) | Fonts, block textures, and interface assets |
 
-这些变量只应配置在服务端，不要添加 VITE_ 前缀。建议在 Vercel 的 Production 环境配置真实桶；如果 Preview 也要编辑，应使用独立测试桶和独立凭据。
+## Development and Testing
 
-### 4. 部署到 Vercel
-
-1. 将项目推送到私有或受控 Git 仓库。
-2. 在 Vercel 导入仓库。
-3. Framework Preset 保持 Other；vercel.json 已指定 npm run build:vercel。
-4. Node.js 版本使用 22.x。
-5. 添加上表环境变量后触发部署。
-
-也可以在安装并登录 Vercel CLI 后从项目目录部署，但生产环境变量仍建议在 Vercel 控制台集中管理。
-
-## 线上数据与安全
-
-- 文章索引位于 R2 的 `state/article-index.json`，正文统一保存为 `articles/<文章 UUID>.json`。
-- 板块配置位于 `state/sections.json`，图片等附件统一保存为 `assets/<内容哈希>.<扩展名>`。
-- 阅读请求不需要编辑密钥；新建、修改、删除和上传资源必须通过密钥验证。
-- 验证成功后使用 HttpOnly、SameSite=Strict 的签名 Cookie 信任当前设备 5 天，连续验证失败 5 次会锁定 15 分钟。
-- 单篇 Markdown 上限 3 MB，单张图片上限 10 MB。
-- R2 凭据和编辑密钥仅存在于服务端环境变量中。
-
-R2 应启用适合自己的备份策略。最低成本做法是定期用兼容 S3 的工具同步整个桶到本地归档；恢复时必须同时保留 state/、articles/ 和 assets/，不要只备份正文对象。
-
-## 开发与质量检查
-
-常用命令：
-
-| 命令 | 用途 |
+| Command | Description |
 | --- | --- |
-| npm run dev | 启动本地文件模式 |
-| npm run test:unit | 快速运行鉴权和存储单元测试，不构建 |
-| npm run typecheck | 运行严格 TypeScript 检查 |
-| npm run lint | 运行 ESLint |
-| npm test | 构建后运行全部测试，包括服务端渲染 |
-| npm run check | 依次执行 lint、类型检查和完整测试 |
-| npm run build:vercel | 生成 Vercel/Nitro 构建 |
+| `npm run dev` | Start the local-file development server |
+| `npm run lint` | Run ESLint |
+| `npm run typecheck` | Run the TypeScript type checker |
+| `npm run test:unit` | Run the fast unit-test suite |
+| `npm test` | Build the project and run all tests |
+| `npm run check` | Run lint, type checking, and the complete test suite |
+| `npm run build:vercel` | Create the Vercel/Nitro build |
 
-正式推送或部署前建议执行：
+Before opening a pull request, run:
 
-    npm run check
-    npm run build:vercel
+```shell
+npm run check
+npm run build:vercel
+```
 
-## 版本库注意事项
+## Contributing
 
-以下内容不应提交：
+Issues and pull requests are welcome. When reporting a problem, please include:
 
-- .env.local 和其他真实环境变量文件
-- content/local/ 中的个人笔记与图片
+- Your operating system, Node.js version, and runtime mode (local or Vercel + R2)
+- The smallest set of steps that reproduces the issue
+- Expected and actual behavior
+- Relevant screenshots or logs, with all secrets and private content removed
+
+Do not commit `.env.local`, real credentials, or personal knowledge-base data from `content/local/`.
+
+## License and Disclaimer
+
+MINELOG is released under the [GNU General Public License v3.0](./LICENSE). You may use, modify, and distribute this project under the terms of that license.
+
+MINELOG is an independent community project and is not affiliated with Mojang Studios or Microsoft. The Minecraft name, marks, and related assets belong to their respective owners.
+
+## Acknowledgements
+
+- [React](https://react.dev/) and [TypeScript](https://www.typescriptlang.org/)
+- [react-markdown](https://github.com/remarkjs/react-markdown), [KaTeX](https://katex.org/), and [highlight.js](https://highlightjs.org/)
+- [Vinext](https://github.com/cloudflare/vinext), [Vercel](https://vercel.com/), and [Cloudflare R2](https://developers.cloudflare.com/r2/)
+
+<p align="center">Made with blocks, books and curiosity.</p>
