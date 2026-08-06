@@ -31,28 +31,23 @@
 
 <a id="界面预览"></a>
 
-<table>
+<table align="center">
   <tr>
-    <td width="900" align="center">
+    <td align="center">
       <a href="./assets/minelog.png">
-        <img width="900" src="./assets/minelog.png" alt="MINELOG 主页">
-      </a>
+        <img src="./assets/minelog.png" alt="MINELOG 主页" width="360">
+      </a><br><b>主页</b>
     </td>
-    <td width="900" align="center">
+    <td align="center">
       <a href="./assets/minelog_article.png">
-        <img width="900" src="./assets/minelog_article.png" alt="MINELOG 文章阅读页面">
-      </a>
+        <img src="./assets/minelog_article.png" alt="MINELOG 文章阅读页面" width="360">
+      </a><br><b>文章阅读</b>
     </td>
-    <td width="900" align="center">
+    <td align="center">
       <a href="./assets/minelog_editor.png">
-        <img width="900" src="./assets/minelog_editor.png" alt="MINELOG Markdown 编辑页面">
-      </a>
+        <img src="./assets/minelog_editor.png" alt="MINELOG Markdown 编辑页面" width="360">
+      </a><br><b>Markdown 编辑器</b>
     </td>
-  </tr>
-  <tr>
-    <td align="center"><b>主页</b></td>
-    <td align="center"><b>文章阅读</b></td>
-    <td align="center"><b>Markdown 编辑器</b></td>
   </tr>
 </table>
 

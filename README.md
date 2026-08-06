@@ -31,28 +31,23 @@
 
 <a id="interface-preview"></a>
 
-<table>
+<table align="center">
   <tr>
-    <td width="900" align="center">
+    <td align="center">
       <a href="./docs/assets/minelog.png">
-        <img width="900" src="./docs/assets/minelog.png" alt="MINELOG home page">
-      </a>
+        <img src="./docs/assets/minelog.png" alt="MINELOG home page" width="360">
+      </a><br><b>Home</b>
     </td>
-    <td width="900" align="center">
+    <td align="center">
       <a href="./docs/assets/minelog_article.png">
-        <img width="900" src="./docs/assets/minelog_article.png" alt="MINELOG article reader">
-      </a>
+        <img src="./docs/assets/minelog_article.png" alt="MINELOG article reader" width="360">
+      </a><br><b>Article Reader</b>
     </td>
-    <td width="900" align="center">
+    <td align="center">
       <a href="./docs/assets/minelog_editor.png">
-        <img width="900" src="./docs/assets/minelog_editor.png" alt="MINELOG Markdown editor">
-      </a>
+        <img src="./docs/assets/minelog_editor.png" alt="MINELOG Markdown editor" width="360">
+      </a><br><b>Markdown Editor</b>
     </td>
-  </tr>
-  <tr>
-    <td align="center"><b>Home</b></td>
-    <td align="center"><b>Article Reader</b></td>
-    <td align="center"><b>Markdown Editor</b></td>
   </tr>
 </table>
 
