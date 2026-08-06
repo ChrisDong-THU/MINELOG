@@ -31,34 +31,30 @@
 
 <a id="界面预览"></a>
 
-<p align="center">
-  <a href="./assets/minelog.png">
-    <img width="100%" src="./assets/minelog.png" alt="MINELOG 主页">
-  </a>
-  <br>
-  <sub><b>主页</b> · 通过书架、知识板块与物品栏浏览个人知识库。</sub>
-</p>
-
 <table>
   <tr>
-    <td width="50%" align="center">
-      <a href="./assets/minelog_article.png">
-        <img src="./assets/minelog_article.png" alt="MINELOG 文章阅读页面">
+    <td width="900" align="center">
+      <a href="./assets/minelog.png">
+        <img width="900" src="./assets/minelog.png" alt="MINELOG 主页">
       </a>
     </td>
-    <td width="50%" align="center">
+    <td width="900" align="center">
+      <a href="./assets/minelog_article.png">
+        <img width="900" src="./assets/minelog_article.png" alt="MINELOG 文章阅读页面">
+      </a>
+    </td>
+    <td width="900" align="center">
       <a href="./assets/minelog_editor.png">
-        <img src="./assets/minelog_editor.png" alt="MINELOG Markdown 编辑页面">
+        <img width="900" src="./assets/minelog_editor.png" alt="MINELOG Markdown 编辑页面">
       </a>
     </td>
   </tr>
   <tr>
-    <td align="center"><sub><b>文章阅读</b> · 在目录导航与完整 Markdown 渲染中专注阅读。</sub></td>
-    <td align="center"><sub><b>Markdown 编辑器</b> · 在同一页面完成写作与实时预览。</sub></td>
+    <td align="center"><b>主页</b></td>
+    <td align="center"><b>文章阅读</b></td>
+    <td align="center"><b>Markdown 编辑器</b></td>
   </tr>
 </table>
-
-<p align="center"><sub>点击任意预览图即可查看原始分辨率截图。</sub></p>
 
 ## 关于 MINELOG
 
