@@ -60,6 +60,7 @@ MINELOG 面向技术笔记、论文阅读记录与长期知识归档。它把 Mi
 ## 功能特性
 
 - **沉浸式知识库界面**：以书架、方块、物品栏和像素动效组织板块与文章，同时适配桌面端和移动端。
+- **可交互访客地球仪**：展示近七天访问地点的半度网格聚合，兼顾动态效果与位置隐私；本地模式不会采集访客数据。
 - **完整 Markdown 写作**：实时预览、编辑工具栏、GFM 表格与任务列表、代码高亮、公式渲染、图片上传和拖拽缩放。
 - **灵活的内容组织**：自由创建板块、调整物品栏入口、编辑文章元数据。
 - **本地与云端双模式**：开发环境直接读写 Markdown 和资源文件；线上环境使用 Vercel 同源 API 与私有 R2 桶。
@@ -113,6 +114,7 @@ content/local/
 R2 bucket
 ├─ state/article-index.json
 ├─ state/sections.json
+├─ state/visitor-locations.json
 ├─ articles/<文章 UUID>.json
 └─ assets/<内容哈希>.<扩展名>
 ```
@@ -195,5 +197,6 @@ MINELOG 是独立的社区项目，与 Mojang Studios 或 Microsoft 无关联。
 - [React](https://react.dev/) 与 [TypeScript](https://www.typescriptlang.org/)
 - [react-markdown](https://github.com/remarkjs/react-markdown)、[KaTeX](https://katex.org/) 与 [highlight.js](https://highlightjs.org/)
 - [Vinext](https://github.com/cloudflare/vinext)、[Vercel](https://vercel.com/) 与 [Cloudflare R2](https://developers.cloudflare.com/r2/)
+- [Solar System Scope](https://www.solarsystemscope.com/textures/) 提供的地球纹理，采用 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) 许可
 
 <p align="center">Made with blocks, books and curiosity.</p>

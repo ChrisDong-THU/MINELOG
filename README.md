@@ -60,6 +60,7 @@ The same interface supports both local files and cloud object storage. Use it as
 ## Features
 
 - **An immersive knowledge base** — Organize sections and articles with bookshelves, blocks, hotbar items, and pixel-style motion on desktop and mobile.
+- **An interactive visitor globe** — Explore a slowly rotating Earth with privacy-preserving, half-degree aggregates for visits from the last seven days; local mode performs no visitor collection.
 - **A complete Markdown workflow** — Write with live preview, a formatting toolbar, GFM tables and task lists, syntax highlighting, math rendering, image uploads, and drag-to-resize images.
 - **Flexible organization** — Create custom sections, rearrange hotbar entries, and edit article metadata.
 - **Local and cloud modes** — Read and write Markdown files during local development, or use a same-origin Vercel API backed by a private R2 bucket.
@@ -113,6 +114,7 @@ Production deployments use Vercel for the application and same-origin API, with 
 R2 bucket
 ├─ state/article-index.json
 ├─ state/sections.json
+├─ state/visitor-locations.json
 ├─ articles/<article UUID>.json
 └─ assets/<content hash>.<extension>
 ```
@@ -195,5 +197,6 @@ MINELOG is an independent community project and is not affiliated with Mojang St
 - [React](https://react.dev/) and [TypeScript](https://www.typescriptlang.org/)
 - [react-markdown](https://github.com/remarkjs/react-markdown), [KaTeX](https://katex.org/), and [highlight.js](https://highlightjs.org/)
 - [Vinext](https://github.com/cloudflare/vinext), [Vercel](https://vercel.com/), and [Cloudflare R2](https://developers.cloudflare.com/r2/)
+- [Solar System Scope](https://www.solarsystemscope.com/textures/) for the Earth texture, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
 
 <p align="center">Made with blocks, books and curiosity.</p>

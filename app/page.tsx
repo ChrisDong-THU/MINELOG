@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type WheelEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type WheelEvent } from "react";
 import { flushSync } from "react-dom";
 import { GameIconButton, GameModal } from "./components/game-modal";
-import { ArticleReader } from "./components/article-reader";
-import { ArticleEditor, type ArticleEditorValue } from "./components/article-editor";
+import type { ArticleEditorValue } from "./components/article-editor";
 import { SectionEditorModal } from "./components/section-editor-modal";
 import { EditorAccessModal } from "./components/editor-access-modal";
 import { getEditorAccess } from "./editor-auth-client";
@@ -18,7 +17,8 @@ import {
 } from "./local-article-files";
 import { loadRemoteSections, saveRemoteSections } from "./remote-sections";
 import { readAppRoute, writeAppRoute, type AppRoute } from "./navigation";
-import { FeedCarousel } from "./components/feed-carousel";
+import { HomeBackdrop } from "./components/home-backdrop";
+import { VisitorGlobe } from "./components/visitor-globe";
 import { SectionPage } from "./components/section-page";
 import { SearchPage } from "./components/search-page";
 import {
@@ -29,11 +29,13 @@ import {
   EMPTY_CONTENT_STATE,
   markdownForArticle,
   parseLegacyContent,
-  selectRecentFeedEntries,
 } from "./content-model";
 import { assignSectionToHotbarSlot, resolveHotbarSections } from "./hotbar-model";
-import type { ContentState, FeedEntry, SearchDocument, Section, SectionArticle } from "./content-types";
+import type { ContentState, SearchDocument, Section, SectionArticle } from "./content-types";
 import { MINECRAFT_UI_ICONS, normalizeSectionIcons } from "./minecraft-icons";
+
+const ArticleEditor = lazy(() => import("./components/article-editor").then((module) => ({ default: module.ArticleEditor })));
+const ArticleReader = lazy(() => import("./components/article-reader").then((module) => ({ default: module.ArticleReader })));
 
 type EditorState = { mode: "new" | "edit"; sectionId: string; articleId: string };
 type EditorRequest = { mode: "new"; sectionId: string } | { mode: "edit"; sectionId: string; articleId: string };
@@ -41,12 +43,6 @@ type SectionDialogState = { mode: "new" | "edit" };
 const KEY = "minelog-toolbar-v1";
 const CONTENT_KEY = "minelog-content-v1";
 const SECTION_STORE = createJsonStorageStore<Section[]>(KEY, []);
-
-const papers: FeedEntry[] = [
-  ["Nature Machine Intelligence", "Agentic Memory for Long-Horizon LLM Agents", "08.01", "14 MIN"],
-  ["NeurIPS 2025", "Efficient Inference via Adaptive Token Routing", "07.28", "11 MIN"],
-  ["ACL 2025", "Multimodal Retrieval-Augmented Generation at Scale", "07.21", "9 MIN"],
-];
 
 function createSectionId() {
   return `section-${window.crypto.randomUUID()}`;
@@ -350,10 +346,6 @@ export default function Home() {
   const visible = useMemo(() => hotbarSections.filter((section): section is Section => Boolean(section)), [hotbarSections]);
   const visibleSectionIds = useMemo(() => new Set(visible.map((section) => section.id)), [visible]);
   const hidden = useMemo(() => sections.filter((section) => !visibleSectionIds.has(section.id)), [sections, visibleSectionIds]);
-  const recentPosts = useMemo<FeedEntry[]>(
-    () => selectRecentFeedEntries(sections, articlesBySection),
-    [sections, articlesBySection],
-  );
   const searchDocuments = useMemo<SearchDocument[]>(
     () => createSearchDocuments(sections, articlesBySection, markdownOverrides),
     [sections, articlesBySection, markdownOverrides],
@@ -721,8 +713,15 @@ export default function Home() {
     document.querySelector<HTMLElement>(".content-viewport")?.scrollTo({ top: 0 });
     ping("文章已删除");
   };
-  return <main className="minecraft-shell">
+  return <main className={`minecraft-shell${active === "home" ? " is-home" : ""}`}>
     <div className="scene-shade" />
+    <HomeBackdrop />
+    <div
+      className={`home-globe-layer${active === "home" ? " is-active" : ""}`}
+      aria-hidden={active !== "home"}
+    >
+      <VisitorGlobe offline={__MINELOG_LOCAL_MODE__} active={active === "home"} />
+    </div>
     <header className="topbar">
       <button className={`brand-lockup${__MINELOG_LOCAL_MODE__ ? " is-local" : ""}`} onClick={() => navigate("home")} aria-label="返回首页">
         <span className="brand-icon-stack">
@@ -742,27 +741,9 @@ export default function Home() {
     </header>
 
     <section className={`content-viewport${immersive ? " is-reading" : ""}`} aria-live="polite">
+      <Suspense fallback={<div className="content-loading-state" role="status">正在载入页面…</div>}>
       {editing ? (editorInitialValue ? <ArticleEditor mode={editing.mode} sections={sections} initialValue={editorInitialValue} onCancel={closeEditor} onSave={saveArticle} onDelete={editing.mode === "edit" ? deleteArticle : undefined} onDirtyChange={handleEditorDirtyChange} /> : <div className="content-loading-state" role="status">正在载入文章正文…</div>) : readingSection && readingArticle ? (readingMarkdownReady ? <ArticleReader section={readingSection} article={readingArticle} markdown={articleMarkdown(readingArticle)} onBack={closeReader} /> : <div className="content-loading-state" role="status">正在载入文章正文…</div>) : <>
-      {active === "home" && <div className="home-content">
-        <div className="hero-copy">
-          <h1 className="hero-title"><img className="hero-title-image" src="/minecraft/ui/minelog-title.png" width={2048} height={299} alt="MINELOG" loading="eager" decoding="sync" fetchPriority="high" draggable={false} /></h1>
-          <p className="tagline">矿脉日志：挖掘 &amp; 记录</p>
-        </div>
-        <div className="broadcast-grid">
-          <section className="broadcast-panel recent-panel">
-            <div className="panel-heading"><div><p className="panel-kicker">WORLD LOG / 01</p><h2>最近更新</h2></div><span className="live-chip"><i /> LIVE</span></div>
-            <FeedCarousel entries={recentPosts} arrow={MINECRAFT_UI_ICONS.back} onOpen={(entry) => {
-              const section = sectionById.get(entry[4] ?? "");
-              const article = section ? articlesBySection[section.id]?.find((item) => item.id === entry[5]) : undefined;
-              if (section && article) openReader(section.id, article.id); else ping("该文章正文尚未录入");
-            }} />
-          </section>
-          <section className="broadcast-panel paper-panel">
-            <div className="panel-heading"><div><p className="panel-kicker">PAPER FEED / 02</p><h2>论文推送</h2></div><span className="live-chip paper-chip"><i /> FEED</span></div>
-            <FeedCarousel entries={papers} arrow={MINECRAFT_UI_ICONS.paperLink} onOpen={() => ping("Paper Feed 接口将在后续阶段接入")} />
-          </section>
-        </div>
-      </div>}
+      {active === "home" && <div className="home-content" />}
 
       {active === "search" && <SearchPage
         query={searchQuery}
@@ -795,6 +776,7 @@ export default function Home() {
         </div>
       </div>}
       </>}
+      </Suspense>
     </section>
 
     <nav className={`game-hud${immersive ? (hudAwake ? " reader-hud-awake" : " reader-hud-hidden") : ""}`} aria-label="页面工具槽" onWheel={switchHotbarPage} onPointerEnter={holdHud} onPointerLeave={releaseHud} onFocus={holdHud} onBlur={releaseHud}>
@@ -857,4 +839,3 @@ export default function Home() {
     />}
   </main>;
 }
-

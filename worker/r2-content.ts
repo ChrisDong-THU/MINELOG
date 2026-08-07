@@ -7,6 +7,7 @@ import {
   imageResponseSecurityHeaders,
   normalizeImageMime,
 } from "../shared/image-assets.ts";
+import { handleVisitorLocationRequest } from "./visitor-locations.ts";
 const ARTICLE_API = "/api/local-articles";
 const ASSET_API = "/api/local-assets";
 const SECTIONS_API = "/api/sections";
@@ -367,6 +368,8 @@ async function handleSections(request: Request, bucket: R2BucketLike) {
 export async function handleR2ContentRequest(request: Request, bucket: R2BucketLike): Promise<Response | null> {
   const url = new URL(request.url);
   try {
+    const visitorResponse = await handleVisitorLocationRequest(request, bucket);
+    if (visitorResponse) return visitorResponse;
     if (url.pathname === ARTICLE_API) return await handleArticles(request, bucket, url);
     if (url.pathname === SECTIONS_API) return await handleSections(request, bucket);
     if (url.pathname === ASSET_API || url.pathname.startsWith(`${ASSET_API}/`)) return await handleAssets(request, bucket, url);

@@ -1,4 +1,4 @@
-import type { ContentState, FeedEntry, SearchDocument, Section, SectionArticle } from "./content-types";
+import type { ContentState, SearchDocument, Section, SectionArticle } from "./content-types";
 import type { LocalArticleFile } from "./local-article-files";
 
 export const EMPTY_CONTENT_STATE: ContentState = { articles: {}, markdown: {} };
@@ -71,14 +71,6 @@ export function contentFromLocalFiles(files: LocalArticleFile[]): ContentState {
     if (typeof file.markdown === "string") markdown[articleMarkdownKey(file.id)] = file.markdown;
   }
   return { articles, markdown };
-}
-
-export function selectRecentFeedEntries(sections: Section[], articles: ContentState["articles"], limit = 10): FeedEntry[] {
-  return sections
-    .flatMap((section) => uniqueArticles(articles[section.id] ?? []).map((article) => ({ section, article })))
-    .sort((a, b) => articleUpdateKey(b.article).localeCompare(articleUpdateKey(a.article)))
-    .slice(0, limit)
-    .map(({ section, article }) => [section.label, article.title, article.date, article.read, section.id, article.id] as FeedEntry);
 }
 
 export function createSearchDocuments(

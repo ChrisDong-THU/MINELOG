@@ -38,7 +38,7 @@
   margin: 0 0 24px;
   padding: 7px 10px;
   border: 1px solid rgba(213, 222, 206, .25);
-  background: rgba(8, 12, 10, .68);
+  background: var(--surface-soft);
   color: #d9ded7;
   font: 10px var(--font);
   cursor: pointer;
@@ -443,7 +443,7 @@
   position: relative;
   overflow: hidden;
   border: 1px solid rgba(215, 223, 210, .2);
-  background: rgba(8, 12, 10, .82);
+  background: var(--surface);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .035), 5px 6px rgba(0, 0, 0, .22);
   color: #dfe5dc;
   text-shadow: none;
