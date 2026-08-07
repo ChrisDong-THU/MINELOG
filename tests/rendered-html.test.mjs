@@ -106,7 +106,11 @@ test("keeps navigation, rendering and local content storage in focused modules",
   assert.match(homeStyles, /\.home-grid-base/);
   assert.match(homeStyles, /@keyframes home-cube-bob/);
   assert.match(homeStyles, /\.minecraft-shell\.is-home \.content-viewport[\s\S]*mask-image: none/);
-  assert.match(homeStyles, /\.home-content::after/);
+  assert.match(page, /className="page-bottom-fade"/);
+  assert.match(homeStyles, /\.page-bottom-fade/);
+  assert.doesNotMatch(homeStyles, /\.home-content::after/);
+  assert.doesNotMatch(globalStyles, /\.content-viewport:not\(\.is-reading\)[^{]*\{[^}]*mask-image:/s);
+  assert.match(globalStyles, /\.content-viewport:not\(\.is-reading\)\s*\{[^}]*height: 100svh/s);
   assert.doesNotMatch(homeStyles, /\.home-backdrop\s*\{[^}]*z-index:/s);
   assert.match(homeStyles, /\.home-grid\s*\{[^}]*z-index: 0/s);
   assert.match(homeStyles, /\.home-cubes\s*\{[^}]*z-index: 2/s);
@@ -185,6 +189,7 @@ test("keeps navigation, rendering and local content storage in focused modules",
   assert.doesNotMatch(sectionPage, /article-index-icon/);
   assert.doesNotMatch(sectionPage, /minecraft\/items\/arrow\.png/);
   assert.match(sectionPage, /article-open-icon/);
+  assert.match(sectionPage, /article-card-details/);
   assert.match(globalStyles, /--article-copy-shift-x: 4px/);
   assert.match(globalStyles, /--article-copy-shift-y: 3px/);
   assert.match(globalStyles, /\.article-card h3[^}]*transform: translate\(var\(--article-copy-shift-x\),var\(--article-copy-shift-y\)\)/s);

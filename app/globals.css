@@ -1102,11 +1102,10 @@ html[data-page-direction="backward"]::view-transition-new(page-content) {
   ::view-transition-new(page-content) { animation-duration: .01ms !important; }
 }
 
-/* Soften the boundary where index pages meet the persistent hotbar. */
 .content-viewport:not(.is-reading) {
-  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 62px), rgba(0, 0, 0, .72) calc(100% - 30px), transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 62px), rgba(0, 0, 0, .72) calc(100% - 30px), transparent 100%);
+  height: 100svh;
 }
+
 .content-viewport:not(.is-reading) .home-content,
 .content-viewport:not(.is-reading) .section-page,
 .content-viewport:not(.is-reading) .more-page,

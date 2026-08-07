@@ -779,6 +779,8 @@ export default function Home() {
       </Suspense>
     </section>
 
+    {!immersive && <div className="page-bottom-fade" aria-hidden="true" />}
+
     <nav className={`game-hud${immersive ? (hudAwake ? " reader-hud-awake" : " reader-hud-hidden") : ""}`} aria-label="页面工具槽" onWheel={switchHotbarPage} onPointerEnter={holdHud} onPointerLeave={releaseHud} onFocus={holdHud} onBlur={releaseHud}>
       <div className="hotbar-shell"><img className="hotbar-frame" src="/minecraft/hud/hotbar.png" alt="" /><div className="hotbar-slots">
         {slots.map((slot, i) => {

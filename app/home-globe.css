@@ -13,8 +13,7 @@
   padding: 0;
   overflow: hidden;
 }
-.home-content::after {
-  content: "";
+.page-bottom-fade {
   position: absolute;
   z-index: 4;
   right: 0;
