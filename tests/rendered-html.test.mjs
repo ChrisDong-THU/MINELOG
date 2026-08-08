@@ -163,6 +163,12 @@ test("keeps navigation, rendering and local content storage in focused modules",
   assert.match(renderer, /rehypeKatex/);
   assert.match(renderer, /rehypeHighlight/);
   assert.match(renderer, /detect: true/);
+  assert.match(readerStyles, /\.markdown-body \{[^}]*overflow-wrap: break-word;[^}]*word-break: normal;[^}]*line-break: auto;/s);
+  assert.doesNotMatch(readerStyles, /overflow-wrap: anywhere|line-break: anywhere/);
+  assert.match(readerStyles, /\.markdown-body :not\(pre\) > code \{[^}]*overflow-wrap: normal;[^}]*word-break: normal;[^}]*white-space: nowrap;/s);
+  assert.match(readerStyles, /\.markdown-body :not\(\.katex-display\) > \.katex \{[^}]*overflow-wrap: normal;[^}]*word-break: normal;[^}]*white-space: nowrap;/s);
+  assert.doesNotMatch(readerStyles, /\.markdown-body :not\(pre\) > code \{[^}]*(?:display|max-width|overflow-x|vertical-align|scrollbar-width):/s);
+  assert.doesNotMatch(readerStyles, /\.markdown-body :not\(\.katex-display\) > \.katex \{[^}]*(?:display|max-width|overflow-x|vertical-align):/s);
   assert.match(renderer, /markdown-code-header/);
   assert.match(readerStyles, /\.markdown-code-block \{/);
   assert.match(readerStyles, /\.hljs-keyword/);

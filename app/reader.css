@@ -118,8 +118,9 @@
 .markdown-body {
   color: rgba(20, 23, 21, .78);
   font: 15px/1.8 Georgia, "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
-  overflow-wrap: anywhere;
-  line-break: anywhere;
+  overflow-wrap: break-word;
+  word-break: normal;
+  line-break: auto;
   text-rendering: optimizeLegibility;
 }
 .markdown-body > :first-child { margin-top: 0 !important; }
@@ -187,6 +188,11 @@
   background: #e8e5dc;
   color: #8e3f31;
   font: .88em/1.6 Consolas, "SFMono-Regular", ui-monospace, monospace;
+}
+.markdown-body :not(pre) > code {
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: nowrap;
 }
 .markdown-body pre {
   overflow: auto;
@@ -348,6 +354,11 @@
 .markdown-body .katex,
 .markdown-body .katex * { box-sizing: content-box; }
 .markdown-body .katex { color: #263424; }
+.markdown-body :not(.katex-display) > .katex {
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: nowrap;
+}
 .markdown-body .katex-display {
   display: block;
   overflow-x: auto;
