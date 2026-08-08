@@ -42,10 +42,6 @@ pnpm-debug.log*
 /docs/screenshots/
 /screenshots/
 
-# Superseded local globe texture experiments
-/public/earth/blue-marble.webp
-/public/earth/earth-satellite-v2.png
-
 # Editor and operating-system files
 .DS_Store
 Thumbs.db

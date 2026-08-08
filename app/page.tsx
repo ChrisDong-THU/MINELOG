@@ -64,7 +64,7 @@ function setPageDirection(direction?: PageDirection) {
 
 function runPageTransition(lock: NavigationLock, update: () => void, direction?: PageDirection) {
   setPageDirection(direction);
-  if (!document.startViewTransition) {
+  if (!document.startViewTransition || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
     update();
     setPageDirection();
     return;

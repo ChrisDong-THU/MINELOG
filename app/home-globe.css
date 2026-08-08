@@ -40,11 +40,10 @@
   transform: translate3d(0, 8vh, 0) scale(.97);
   transform-origin: 50% 100%;
   pointer-events: none;
-  view-transition-name: home-globe;
   transition:
-    opacity 300ms ease,
-    transform 480ms cubic-bezier(.2, .74, .2, 1),
-    visibility 0s linear 480ms;
+    opacity 220ms ease-out,
+    transform 340ms cubic-bezier(.22, .78, .24, 1),
+    visibility 0s linear 340ms;
   will-change: opacity, transform;
 }
 .home-globe-layer.is-active {
@@ -54,25 +53,6 @@
   transition-delay: 0s;
 }
 .home-globe-layer .earth-canvas { pointer-events: auto; }
-
-::view-transition-group(home-globe) {
-  animation-duration: 480ms;
-  animation-timing-function: cubic-bezier(.2, .74, .2, 1);
-}
-::view-transition-old(home-globe),
-::view-transition-new(home-globe) {
-  animation-duration: 480ms;
-  animation-fill-mode: both;
-  mix-blend-mode: normal;
-}
-::view-transition-old(home-globe) { animation-name: home-globe-out; }
-::view-transition-new(home-globe) { animation-name: home-globe-in; }
-@keyframes home-globe-out {
-  to { opacity: 0; transform: translateY(8vh) scale(.97); }
-}
-@keyframes home-globe-in {
-  from { opacity: 0; transform: translateY(8vh) scale(.97); }
-}
 .home-grid {
   position: absolute;
   inset: -34px;
@@ -221,6 +201,4 @@
   .home-cube img { animation: none; }
   .earth-stage { filter: none; }
   .home-globe-layer { transform: none; }
-  ::view-transition-old(home-globe),
-  ::view-transition-new(home-globe) { animation-duration: .01ms !important; }
 }

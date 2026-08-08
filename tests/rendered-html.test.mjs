@@ -115,13 +115,14 @@ test("keeps navigation, rendering and local content storage in focused modules",
   assert.match(homeStyles, /\.home-grid\s*\{[^}]*z-index: 0/s);
   assert.match(homeStyles, /\.home-cubes\s*\{[^}]*z-index: 2/s);
   assert.match(homeStyles, /\.home-globe-layer\.is-active/);
-  assert.match(homeStyles, /view-transition-name: home-globe/);
-  assert.match(homeStyles, /::view-transition-old\(home-globe\)/);
-  assert.match(homeStyles, /@keyframes home-globe-out/);
+  assert.doesNotMatch(homeStyles, /view-transition-name: home-globe|::view-transition-old\(home-globe\)|@keyframes home-globe-out/);
   assert.match(globalStyles, /--surface-raised:/);
   assert.doesNotMatch(globalStyles, /panorama_0\.png/);
+  assert.match(globalStyles, /html \{ view-transition-name: none; \}/);
+  assert.match(globalStyles, /::view-transition-group\(page-content\)[\s\S]*animation-duration: 280ms/s);
   assert.match(globalStyles, /@keyframes page-forward-in/);
   assert.match(globalStyles, /@keyframes page-backward-in/);
+  assert.doesNotMatch(globalStyles, /page-push-out-left|page-title-out|translateX\(-105vw\)|scale\(\.99/);
   assert.match(homeBackdrop, /Cube_\$\{cube\.image\}\.png/);
   assert.match(homeBackdrop, /window\.addEventListener\("pointermove"/);
   assert.match(homeBackdrop, /prefers-reduced-motion: reduce/);
