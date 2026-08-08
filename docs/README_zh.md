@@ -34,26 +34,23 @@
 <table align="center">
   <tr>
     <td align="center">
-      <a href="./assets/minelog.png">
-        <img src="./assets/minelog.png" alt="MINELOG 主页" width="360">
-      </a><br><b>主页</b>
+      <img src="./assets/home.png" alt="MINELOG 主页" width="420"><br><b>主页</b>
     </td>
     <td align="center">
-      <a href="./assets/minelog_article.png">
-        <img src="./assets/minelog_article.png" alt="MINELOG 文章阅读页面" width="360">
-      </a><br><b>文章阅读</b>
+      <img src="./assets/block.png" alt="MINELOG 板块页面" width="420"><br><b>板块</b>
     </td>
     <td align="center">
-      <a href="./assets/minelog_editor.png">
-        <img src="./assets/minelog_editor.png" alt="MINELOG Markdown 编辑页面" width="360">
-      </a><br><b>Markdown 编辑器</b>
+      <img src="./assets/article.png" alt="MINELOG 文章阅读页面" width="420"><br><b>阅读</b>
+    </td>
+    <td align="center">
+      <img src="./assets/editor.png" alt="MINELOG Markdown 编辑页面" width="420"><br><b>编辑器</b>
     </td>
   </tr>
 </table>
 
 ## 关于 MINELOG
 
-MINELOG 面向技术笔记、论文阅读记录与长期知识归档。它把 Minecraft 风格的书架、物品栏和像素界面，与完整的 Markdown 写作体验放在同一个响应式 Web 应用中。
+MINELOG 的含义是“我的日志”。它面向技术笔记、论文阅读记录与长期知识归档，把 Minecraft 风格的书架、物品栏和像素界面，与完整的 Markdown 写作体验放在同一个响应式 Web 应用中。
 
 项目同时支持本地文件与云端对象存储：你可以把它当作一套完全离线、便于备份的个人笔记工具，也可以部署到 Vercel，通过 Cloudflare R2 在不同设备间访问同一份知识库。
 

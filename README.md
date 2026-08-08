@@ -34,26 +34,23 @@
 <table align="center">
   <tr>
     <td align="center">
-      <a href="./docs/assets/minelog.png">
-        <img src="./docs/assets/minelog.png" alt="MINELOG home page" width="360">
-      </a><br><b>Home</b>
+      <img src="./docs/assets/home.png" alt="MINELOG home page" width="420"><br><b>Home</b>
     </td>
     <td align="center">
-      <a href="./docs/assets/minelog_article.png">
-        <img src="./docs/assets/minelog_article.png" alt="MINELOG article reader" width="360">
-      </a><br><b>Article Reader</b>
+      <img src="./docs/assets/block.png" alt="MINELOG section page" width="420"><br><b>Sections</b>
     </td>
     <td align="center">
-      <a href="./docs/assets/minelog_editor.png">
-        <img src="./docs/assets/minelog_editor.png" alt="MINELOG Markdown editor" width="360">
-      </a><br><b>Markdown Editor</b>
+      <img src="./docs/assets/article.png" alt="MINELOG article reader" width="420"><br><b>Reader</b>
+    </td>
+    <td align="center">
+      <img src="./docs/assets/editor.png" alt="MINELOG Markdown editor" width="420"><br><b>Editor</b>
     </td>
   </tr>
 </table>
 
 ## About MINELOG
 
-MINELOG is built for technical notes, research reading logs, and long-term knowledge archives. It brings Minecraft-inspired bookshelves, items, and pixel UI into a responsive web application with a complete Markdown writing experience.
+MINELOG stands for “My Log.” It is built for technical notes, research reading logs, and long-term knowledge archives. It brings Minecraft-inspired bookshelves, items, and pixel UI into a responsive web application with a complete Markdown writing experience.
 
 The same interface supports both local files and cloud object storage. Use it as a fully offline personal notebook that is easy to back up, or deploy it to Vercel and access the same knowledge base across devices through Cloudflare R2.
 

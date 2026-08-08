@@ -65,6 +65,8 @@ test("keeps navigation, rendering and local content storage in focused modules",
   const homeStyles = await source("app/home-globe.css");
   const homeBackdrop = await source("app/components/home-backdrop.tsx");
   const gameSelect = await source("app/components/game-select.tsx");
+  const englishReadme = await source("README.md");
+  const chineseReadme = await source("docs/README_zh.md");
 
   assert.match(page, /from "\.\/navigation"/);
   assert.match(page, /from "\.\/browser-storage"/);
@@ -73,7 +75,16 @@ test("keeps navigation, rendering and local content storage in focused modules",
   assert.match(page, /lazy\(\(\) => import\("\.\/components\/article-editor"\)/);
   assert.match(page, /lazy\(\(\) => import\("\.\/components\/article-reader"\)/);
   assert.match(page, /<Suspense fallback=/);
-  assert.doesNotMatch(page, /feed-carousel|broadcast-grid|矿脉日志：挖掘|论文推送|最近更新/);
+  assert.doesNotMatch(page, /feed-carousel|broadcast-grid|论文推送|最近更新/);
+  assert.match(layout, /title: "我的日志 MINELOG"/);
+  assert.match(searchPage, /搜索我的日志/);
+  assert.match(englishReadme, /MINELOG (?:means|stands for) “My Log/);
+  assert.match(chineseReadme, /MINELOG (?:意为|的含义是)“?我的日志/);
+  for (const image of ["home", "block", "article", "editor"]) {
+    assert.match(englishReadme, new RegExp(`docs/assets/${image}\\.png`));
+    assert.match(chineseReadme, new RegExp(`assets/${image}\\.png`));
+  }
+  assert.doesNotMatch(`${englishReadme}\n${chineseReadme}`, /minelog(?:_article|_editor)?\.png/);
   assert.doesNotMatch(layout, /minelog-title\.png/);
   assert.match(layout, /import "\.\/home-globe\.css"/);
   assert.match(page, /<HomeBackdrop \/>/);

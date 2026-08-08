@@ -121,7 +121,7 @@ export function SearchPage({
   return <div className="search-page">
     <header className="section-hero search-hero">
       <div className="section-title">
-        <h1>搜索知识矿脉</h1>
+        <h1>搜索我的日志</h1>
         <span>从标题、摘要、标签与 Markdown 正文中定位需要的内容。</span>
       </div>
     </header>
@@ -170,7 +170,7 @@ export function SearchPage({
           <img className="search-result-arrow" src={MINECRAFT_UI_ICONS.back} alt="" />
         </button>)}</div> : <div className="search-empty">
         <img src={MINECRAFT_UI_ICONS.search} alt="" />
-        <strong>这条矿脉暂时没有记录</strong>
+        <strong>这里暂时没有记录</strong>
         <span>尝试减少关键词，或改用板块名称与文章标签。</span>
         <button type="button" onClick={() => { onQueryChange(""); inputRef.current?.focus(); }}>重新搜索</button>
       </div>}
