@@ -163,6 +163,63 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--lime); outline-
   contain: paint;
 }
 
+.article-back-to-top {
+  position: fixed;
+  right: clamp(16px, 2.6vw, 38px);
+  bottom: max(24px, env(safe-area-inset-bottom));
+  z-index: 65;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgba(218, 226, 216, .28);
+  border-radius: 50%;
+  background: rgba(19, 27, 22, .86);
+  color: rgba(235, 240, 232, .82);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, .3), inset 0 1px rgba(255, 255, 255, .07);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px) scale(.94);
+  visibility: hidden;
+  backdrop-filter: blur(10px);
+  transition: opacity .2s ease, transform .24s cubic-bezier(.2, .8, .2, 1), visibility 0s linear .24s, border-color .18s ease, background .18s ease;
+}
+.article-back-to-top.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+  visibility: visible;
+  transition-delay: 0s;
+}
+.article-back-to-top svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+.article-back-to-top:hover {
+  border-color: rgba(185, 237, 97, .56);
+  background: rgba(34, 46, 38, .94);
+  color: #dff8b1;
+}
+.article-back-to-top:active { transform: translateY(1px) scale(.96); }
+@media (max-width: 620px) {
+  .article-back-to-top {
+    right: 14px;
+    width: 40px;
+    height: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .article-back-to-top { transition: none; }
+}
+
 .section-page {
   width: min(1160px,92vw);
   min-height: 100%;
@@ -439,13 +496,16 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--lime); outline-
 
 .game-hud {
   position: absolute;
-  z-index: 10;
+  z-index: 70;
   left: 50%;
   bottom: max(8px, env(safe-area-inset-bottom));
   width: min(436px,calc(100vw - 24px));
   height: auto;
   aspect-ratio: 182/22;
   transform: translateX(-50%);
+}
+.game-hud:not(.immersive-hud-hidden):not(.immersive-hud-awake) {
+  view-transition-name: page-hud;
 }
 
 .hotbar-shell {
@@ -1038,6 +1098,32 @@ html[data-page-direction="backward"]::view-transition-old(page-content) {
 html[data-page-direction="backward"]::view-transition-new(page-content) {
   animation: page-backward-in 280ms cubic-bezier(.22,.78,.24,1) both;
 }
+::view-transition-group(page-hud) {
+  z-index: 100;
+  animation: none;
+}
+::view-transition-image-pair(page-hud) { isolation: auto; }
+::view-transition-old(page-hud) {
+  animation: page-hud-out 120ms ease-out both;
+  mix-blend-mode: normal;
+}
+::view-transition-new(page-hud) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-group(page-bottom-fade) {
+  z-index: 90;
+  animation: none;
+}
+::view-transition-image-pair(page-bottom-fade) { isolation: auto; }
+::view-transition-old(page-bottom-fade) {
+  animation: page-hud-out 120ms ease-out both;
+  mix-blend-mode: normal;
+}
+::view-transition-new(page-bottom-fade) {
+  animation: none;
+  mix-blend-mode: normal;
+}
 @keyframes page-soft-out {
   to { opacity: 0; transform: translate3d(0, -3px, 0); }
 }
@@ -1056,11 +1142,18 @@ html[data-page-direction="backward"]::view-transition-new(page-content) {
 @keyframes page-backward-in {
   from { opacity: 0; transform: translate3d(-12px, 0, 0); }
 }
+@keyframes page-hud-out {
+  to { opacity: 0; }
+}
 
 
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(page-content),
-  ::view-transition-new(page-content) { animation-duration: .01ms !important; }
+  ::view-transition-new(page-content),
+  ::view-transition-old(page-hud),
+  ::view-transition-new(page-hud),
+  ::view-transition-old(page-bottom-fade),
+  ::view-transition-new(page-bottom-fade) { animation-duration: .01ms !important; }
 }
 
 .content-viewport:not(.is-reading) {

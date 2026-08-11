@@ -99,6 +99,7 @@ export default function Home() {
   const [editorDirty, setEditorDirty] = useState(false);
   const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
   const [hudAwake, setHudAwake] = useState(true);
+  const [backToTopState, setBackToTopState] = useState({ contentKey: "", visible: false });
   const navigating = useRef(false);
   const dragOriginRef = useRef<"hotbar" | "more" | null>(null);
   const draggingSectionRef = useRef<string | null>(null);
@@ -336,6 +337,50 @@ export default function Home() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, [hydrated, contentReady, authReady, sectionsRemoteReady, requestEditorExit]);
   const immersive = Boolean(reading || editing);
+  const autoHideHud = immersive;
+  const immersiveContentKey = editing
+    ? `editing:${editing.articleId}`
+    : reading
+      ? `reading:${reading.articleId}`
+      : "";
+  const showBackToTop = backToTopState.contentKey === immersiveContentKey && backToTopState.visible;
+  useEffect(() => {
+    if (!immersive) return undefined;
+
+    const viewport = document.querySelector<HTMLElement>(".content-viewport");
+    if (!viewport) return undefined;
+
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const remaining = viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop;
+      const nearBottom = remaining <= Math.max(120, viewport.clientHeight * 0.18);
+      const visible = viewport.scrollTop > 240 && nearBottom;
+      setBackToTopState((current) => current.contentKey === immersiveContentKey && current.visible === visible
+        ? current
+        : { contentKey: immersiveContentKey, visible });
+    };
+    const scheduleUpdate = () => {
+      if (!frame) frame = window.requestAnimationFrame(update);
+    };
+
+    scheduleUpdate();
+    viewport.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      viewport.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
+    };
+  }, [immersive, immersiveContentKey]);
+
+  const scrollArticleToTop = useCallback(() => {
+    const viewport = document.querySelector<HTMLElement>(".content-viewport");
+    if (!viewport) return;
+    const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+    viewport.scrollTo({ top: 0, left: 0, behavior });
+  }, []);
+
   useEffect(() => () => {
     if (hudTimer.current !== null) window.clearTimeout(hudTimer.current);
     if (noticeTimer.current !== null) window.clearTimeout(noticeTimer.current);
@@ -451,19 +496,19 @@ export default function Home() {
   };
 
   const wakeHud = () => {
-    if (!immersive) return;
+    if (!autoHideHud) return;
     if (hudTimer.current !== null) window.clearTimeout(hudTimer.current);
     setHudAwake(true);
     hudTimer.current = window.setTimeout(() => setHudAwake(false), 2600);
   };
   const holdHud = () => {
-    if (!immersive) return;
+    if (!autoHideHud) return;
     if (hudTimer.current !== null) window.clearTimeout(hudTimer.current);
     hudTimer.current = null;
     setHudAwake(true);
   };
   const releaseHud = () => {
-    if (!immersive) return;
+    if (!autoHideHud) return;
     if (hudTimer.current !== null) window.clearTimeout(hudTimer.current);
     hudTimer.current = window.setTimeout(() => setHudAwake(false), 900);
   };
@@ -779,9 +824,22 @@ export default function Home() {
       </Suspense>
     </section>
 
+    {immersive && <button
+      type="button"
+      className={`article-back-to-top${showBackToTop ? " is-visible" : ""}`}
+      aria-label="回到顶部"
+      aria-hidden={!showBackToTop}
+      tabIndex={showBackToTop ? 0 : -1}
+      onClick={scrollArticleToTop}
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M5 7.5h14M6.5 15.5 12 10l5.5 5.5" />
+      </svg>
+    </button>}
+
     {!immersive && <div className="page-bottom-fade" aria-hidden="true" />}
 
-    <nav className={`game-hud${immersive ? (hudAwake ? " reader-hud-awake" : " reader-hud-hidden") : ""}`} aria-label="页面工具槽" onWheel={switchHotbarPage} onPointerEnter={holdHud} onPointerLeave={releaseHud} onFocus={holdHud} onBlur={releaseHud}>
+    <nav className={`game-hud${autoHideHud ? (hudAwake ? " immersive-hud-awake" : " immersive-hud-hidden") : ""}`} aria-label="页面工具槽" onWheel={switchHotbarPage} onPointerEnter={holdHud} onPointerLeave={releaseHud} onFocus={holdHud} onBlur={releaseHud}>
       <div className="hotbar-shell"><img className="hotbar-frame" src="/minecraft/hud/hotbar.png" alt="" /><div className="hotbar-slots">
         {slots.map((slot, i) => {
           if (!slot) return <button
@@ -815,7 +873,7 @@ export default function Home() {
         })}
       </div></div>
     </nav>
-    {immersive && <button className={`hud-wake-zone${hudAwake ? " is-dormant" : ""}`} type="button" aria-label="显示页面工具栏" onPointerEnter={wakeHud} onClick={wakeHud} />}
+    {autoHideHud && <button className={`hud-wake-zone${hudAwake ? " is-dormant" : ""}`} type="button" aria-label="显示页面工具栏" onPointerEnter={wakeHud} onClick={wakeHud} />}
 
     {notice && <div className="toast" role="status">{notice}</div>}
 
