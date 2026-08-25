@@ -506,7 +506,6 @@
 .reader-details div + div { border-left: 1px solid rgba(215, 223, 210, .09); }
 .reader-details dt { color: #748071; font: 7px ui-monospace, monospace; letter-spacing: .1em; }
 .reader-details dd { margin: 0; overflow: hidden; color: #c8d0c5; font: 8px ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
-.reader-details .reader-detail-author dd { color: #d9dfd6; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
 .reader-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 11px; padding-top: 11px; border-top: 1px solid rgba(215, 223, 210, .1); }
 .reader-tags span { padding: 3px 6px; border: 1px solid rgba(185, 237, 97, .18); background: rgba(185, 237, 97, .045); color: #b6cf89; font: 7px ui-monospace, monospace; }
 

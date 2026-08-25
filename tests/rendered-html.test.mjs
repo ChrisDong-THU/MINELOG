@@ -229,6 +229,7 @@ test("keeps navigation, rendering and local content storage in focused modules",
   assert.match(readerStyles, /\.reader-details \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/s);
   assert.match(readerStyles, /\.reader-details \{[^}]*margin: 0 8px/s);
   assert.match(readerStyles, /\.reader-details div \{[^}]*padding: 0 7px[^}]*text-align: center/s);
+  assert.doesNotMatch(readerStyles, /\.reader-detail-author dd/);
   assert.match(articleReader, /<dt>浏览<\/dt><dd>\{views === null \? "—" : views\.toLocaleString\("zh-CN"\)\}<\/dd>/);
   assert.doesNotMatch(articleReader, /<dd>\{article\.read\}<\/dd>/);
   assert.match(articleViews, /window\.sessionStorage\.getItem\(sessionKey\) === "1"/);
