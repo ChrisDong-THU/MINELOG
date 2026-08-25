@@ -407,6 +407,7 @@ export default function Home() {
     id: editing.articleId,
     sectionId: editing.sectionId,
     title: editingArticle?.title ?? "",
+    author: editingArticle?.author ?? "",
     summary: editingArticle?.summary ?? "",
     tags: editingArticle?.tags ?? [],
     markdown: editingArticle ? articleMarkdown(editingArticle) : "",
@@ -692,6 +693,7 @@ export default function Home() {
     const nextArticle: SectionArticle = {
       id: value.id,
       title: value.title,
+      author: value.author,
       summary: value.summary,
       tags: value.tags,
       date,

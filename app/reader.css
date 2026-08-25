@@ -350,7 +350,7 @@
 .markdown-body .contains-task-list { padding-left: .35em; list-style: none; }
 .markdown-body .task-list-item { list-style: none; }
 
-/* Preserve KaTeX's native geometry. Display math is only scaled when it overflows. */
+/* Preserve KaTeX's native geometry and scroll wide display formulas without shrinking them. */
 .markdown-body .katex,
 .markdown-body .katex * { box-sizing: content-box; }
 .markdown-body .katex { color: #263424; }
@@ -370,17 +370,17 @@
   scrollbar-color: #b8b4aa transparent;
 }
 .markdown-body .katex-display > .katex {
-  display: inline-block !important;
-  width: auto;
+  display: block !important;
+  width: max-content;
+  min-width: 100%;
   max-width: none;
   margin: 0;
-  text-align: initial;
+  text-align: center;
   white-space: nowrap;
-  transform-origin: center top;
 }
-.markdown-body .katex-display.is-scaled { overflow-x: hidden; }
-.markdown-body .katex-display::-webkit-scrollbar { height: 5px; }
-.markdown-body .katex-display::-webkit-scrollbar-thumb { background: #b8b4aa; }
+.markdown-body .katex-display::-webkit-scrollbar { height: 8px; }
+.markdown-body .katex-display::-webkit-scrollbar-track { background: #e4e1d9; }
+.markdown-body .katex-display::-webkit-scrollbar-thumb { border: 2px solid #e4e1d9; background: #a8afa2; }
 
 .reader-toc {
   position: sticky;
@@ -471,7 +471,7 @@
   opacity: .78;
 }
 .reader-overview { padding: 18px 16px 15px; }
-.reader-section-mark { display: flex; gap: 12px; align-items: center; }
+.reader-section-mark { display: flex; gap: 12px; align-items: center; padding-bottom: 13px; border-bottom: 1px solid rgba(215, 223, 210, .12); }
 .reader-section-icon {
   display: grid;
   flex: 0 0 42px;
@@ -483,24 +483,32 @@
   box-shadow: inset -4px -4px rgba(0, 0, 0, .24), 2px 3px rgba(0, 0, 0, .28);
 }
 .reader-section-icon img { width: 27px; height: 27px; image-rendering: pixelated; filter: drop-shadow(2px 2px rgba(0, 0, 0, .65)); }
-.reader-section-mark > span:last-child { min-width: 0; }
-.reader-section-mark small,
-.reader-section-mark strong { display: block; }
-.reader-section-mark small { color: #93a07f; font: 6px ui-monospace, monospace; letter-spacing: .12em; }
-.reader-section-mark strong { margin-top: 5px; color: #f0f3ed; font-size: 15px; font-weight: 500; }
+.reader-section-copy { min-width: 0; }
+.reader-section-copy small,
+.reader-section-copy strong { display: block; }
+.reader-section-copy small { color: #879280; font: 7px ui-monospace, monospace; letter-spacing: .12em; }
+.reader-section-copy strong { margin-top: 3px; overflow: hidden; color: #f0f3ed; font-size: 14px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .reader-details {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  margin: 16px 0 0;
-  padding-top: 14px;
-  border-top: 1px solid rgba(215, 223, 210, .13);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0 8px;
+  padding-top: 12px;
 }
-.reader-details div { min-width: 0; }
-.reader-details div + div { padding-left: 13px; border-left: 1px solid rgba(215, 223, 210, .13); }
-.reader-details dt { color: #7f8a7d; font: 7px ui-monospace, monospace; letter-spacing: .1em; }
-.reader-details dd { margin: 6px 0 0; overflow: hidden; color: #d9dfd6; font: 9px ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
-.reader-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
-.reader-tags span { padding: 4px 6px; border: 1px solid rgba(185, 237, 97, .24); background: rgba(185, 237, 97, .055); color: #bddb84; font: 7px ui-monospace, monospace; }
+.reader-details div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 0 7px;
+  text-align: center;
+}
+.reader-details div:first-child { padding-left: 0; }
+.reader-details div:last-child { padding-right: 0; }
+.reader-details div + div { border-left: 1px solid rgba(215, 223, 210, .09); }
+.reader-details dt { color: #748071; font: 7px ui-monospace, monospace; letter-spacing: .1em; }
+.reader-details dd { margin: 0; overflow: hidden; color: #c8d0c5; font: 8px ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.reader-details .reader-detail-author dd { color: #d9dfd6; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
+.reader-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 11px; padding-top: 11px; border-top: 1px solid rgba(215, 223, 210, .1); }
+.reader-tags span { padding: 3px 6px; border: 1px solid rgba(185, 237, 97, .18); background: rgba(185, 237, 97, .045); color: #b6cf89; font: 7px ui-monospace, monospace; }
 
 .reader-page .reader-toc { position: relative; top: auto; padding: 19px 16px 17px; }
 .reader-page .reader-toc > span { display: block; color: #b9ed61; font: 7px ui-monospace, monospace; letter-spacing: .2em; }

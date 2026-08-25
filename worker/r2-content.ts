@@ -8,7 +8,9 @@ import {
   normalizeImageMime,
 } from "../shared/image-assets.ts";
 import { handleVisitorLocationRequest } from "./visitor-locations.ts";
+import { articleAuthor } from "../shared/article-metadata.ts";
 const ARTICLE_API = "/api/local-articles";
+const ARTICLE_VIEWS_API = "/api/article-views";
 const ASSET_API = "/api/local-assets";
 const SECTIONS_API = "/api/sections";
 const ARTICLE_INDEX_KEY = "state/article-index.json";
@@ -41,6 +43,7 @@ type Article = {
   id: string;
   sectionId: string;
   title: string;
+  author: string;
   summary: string;
   date: string;
   read: string;
@@ -81,6 +84,14 @@ function cleanText(value: unknown, field: string, maxLength: number) {
   return cleaned;
 }
 
+function cleanOptionalText(value: unknown, field: string, maxLength: number) {
+  if (value === undefined) return "";
+  if (typeof value !== "string") throw new Error(`${field}格式不正确`);
+  const cleaned = value.replace(/\r\n?/g, "\n").trim();
+  if (cleaned.length > maxLength) throw new Error(`${field}长度不合法`);
+  return cleaned;
+}
+
 function normalizeArticle(value: unknown): Article {
   if (!value || typeof value !== "object") throw new Error("文章数据格式不正确");
   const source = value as Record<string, unknown>;
@@ -93,7 +104,8 @@ function normalizeArticle(value: unknown): Article {
     id: safeArticleId(source.id),
     sectionId: safeSectionId(source.sectionId),
     title: cleanText(source.title, "文章标题", 240),
-    summary: cleanText(source.summary, "文章副标题", 600),
+    author: articleAuthor(cleanOptionalText(source.author, "作者", 80)),
+    summary: cleanOptionalText(source.summary, "文章副标题", 600),
     date: cleanText(source.date, "更新日期", 32),
     read: cleanText(source.read, "阅读时长", 32),
     tags,
@@ -137,12 +149,30 @@ function articleObjectKey(articleId: string) {
   return `articles/${articleId}.json`;
 }
 
+function articleViewsObjectKey(articleId: string) {
+  return `metrics/article-views/${articleId}.json`;
+}
+
+function sameOrigin(request: Request) {
+  const origin = request.headers.get("origin");
+  return !origin || origin === new URL(request.url).origin;
+}
+
+async function readArticleViews(bucket: R2BucketLike, articleId: string) {
+  const object = await bucket.get(articleViewsObjectKey(articleId));
+  if (!object) return 0;
+  const value = JSON.parse(await object.text()) as { views?: unknown };
+  return typeof value.views === "number" && Number.isSafeInteger(value.views) && value.views >= 0 ? value.views : 0;
+}
+
 async function readArticleIndex(bucket: R2BucketLike) {
   const object = await bucket.get(ARTICLE_INDEX_KEY);
   if (!object) return [] as ArticleIndexRecord[];
   try {
     const value = JSON.parse(await object.text()) as unknown;
-    return Array.isArray(value) ? value as ArticleIndexRecord[] : [];
+    return Array.isArray(value)
+      ? value.map((record) => ({ ...(record as ArticleIndexRecord), author: articleAuthor((record as { author?: unknown }).author) }))
+      : [];
   } catch {
     throw new Error("线上文章索引损坏");
   }
@@ -219,7 +249,8 @@ async function handleArticles(request: Request, bucket: R2BucketLike, url: URL) 
       if (!record) return json(404, { error: "文章不存在" });
       const object = await bucket.get(record.objectKey);
       if (!object) return json(404, { error: "文章正文不存在" });
-      return json(200, { article: JSON.parse(await object.text()) });
+      const article = JSON.parse(await object.text()) as Article;
+      return json(200, { article: { ...article, author: articleAuthor(article.author) } });
     }
     const initialized = Boolean(await bucket.head(INITIALIZED_KEY));
     return json(200, { available: true, initialized, articles: records.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map(publicMetadata) });
@@ -269,13 +300,30 @@ async function handleArticles(request: Request, bucket: R2BucketLike, url: URL) 
     const records = await hydrateArticleAssetKeys(bucket, await readArticleIndex(bucket));
     const removed = records.filter((item) => item.sectionId === sectionId && (articleId === undefined || item.id === articleId));
     const remaining = records.filter((item) => !removed.includes(item));
-    if (removed.length) await bucket.delete(removed.map((item) => item.objectKey));
+    if (removed.length) await bucket.delete(removed.flatMap((item) => [item.objectKey, articleViewsObjectKey(item.id)]));
     await writeArticleIndex(bucket, remaining);
     await deleteUnreferencedR2Assets(bucket, removed.flatMap((item) => item.assetKeys ?? []), remaining);
     return json(200, { deleted: removed.length });
   }
 
   return json(405, { error: "不支持的请求方法" }, { allow: "GET, POST, PUT, DELETE" });
+}
+
+async function handleArticleViews(request: Request, bucket: R2BucketLike, url: URL) {
+  if (request.method !== "GET" && request.method !== "POST") {
+    return json(405, { error: "不支持的请求方法" }, { allow: "GET, POST" });
+  }
+  const articleId = safeArticleId(url.searchParams.get("id"));
+  const records = await readArticleIndex(bucket);
+  if (!records.some((record) => record.id === articleId)) return json(404, { error: "文章不存在" });
+
+  const current = await readArticleViews(bucket, articleId);
+  if (request.method === "GET") return json(200, { views: current });
+  if (!sameOrigin(request)) return json(403, { error: "访问来源不合法" });
+
+  const views = Math.min(Number.MAX_SAFE_INTEGER, current + 1);
+  await bucket.put(articleViewsObjectKey(articleId), JSON.stringify({ views }), { httpMetadata: { contentType: "application/json; charset=utf-8" } });
+  return json(200, { views });
 }
 
 function privateHost(hostname: string) {
@@ -370,6 +418,7 @@ export async function handleR2ContentRequest(request: Request, bucket: R2BucketL
   try {
     const visitorResponse = await handleVisitorLocationRequest(request, bucket);
     if (visitorResponse) return visitorResponse;
+    if (url.pathname === ARTICLE_VIEWS_API) return await handleArticleViews(request, bucket, url);
     if (url.pathname === ARTICLE_API) return await handleArticles(request, bucket, url);
     if (url.pathname === SECTIONS_API) return await handleSections(request, bucket);
     if (url.pathname === ASSET_API || url.pathname.startsWith(`${ASSET_API}/`)) return await handleAssets(request, bucket, url);

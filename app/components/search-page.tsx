@@ -21,6 +21,7 @@ function plainText(markdown: string) {
 type IndexedSearchDocument = {
   document: SearchDocument;
   title: string;
+  author: string;
   summary: string;
   section: string;
   tags: string;
@@ -31,6 +32,7 @@ type IndexedSearchDocument = {
 
 function indexDocument(document: SearchDocument): IndexedSearchDocument {
   const title = normalize(document.article.title);
+  const author = normalize(document.article.author);
   const summary = normalize(document.article.summary);
   const section = normalize(document.sectionLabel);
   const tags = normalize(document.article.tags.join(" "));
@@ -40,12 +42,13 @@ function indexDocument(document: SearchDocument): IndexedSearchDocument {
   return {
     document,
     title,
+    author,
     summary,
     section,
     tags,
     body,
     normalizedBody,
-    searchable: [title, summary, section, tags, normalizedBody].join(" "),
+    searchable: [title, author, summary, section, tags, normalizedBody].join(" "),
   };
 }
 
@@ -87,10 +90,11 @@ export function SearchPage({
     if (!terms.length) return [];
     return indexedDocuments
       .map((indexed) => {
-        const { title, summary, section, tags, normalizedBody: body, searchable } = indexed;
+        const { title, author, summary, section, tags, normalizedBody: body, searchable } = indexed;
         if (!terms.every((term) => searchable.includes(term))) return null;
         const score = terms.reduce((total, term) => total
           + (title === term ? 120 : title.startsWith(term) ? 70 : title.includes(term) ? 48 : 0)
+          + (author.includes(term) ? 28 : 0)
           + (tags.includes(term) ? 24 : 0)
           + (section.includes(term) ? 16 : 0)
           + (summary.includes(term) ? 12 : 0)
@@ -122,7 +126,7 @@ export function SearchPage({
     <header className="section-hero search-hero">
       <div className="section-title">
         <h1>搜索我的日志</h1>
-        <span>从标题、摘要、标签与 Markdown 正文中定位需要的内容。</span>
+        <span>从标题、作者、摘要、标签与 Markdown 正文中定位需要的内容。</span>
       </div>
     </header>
 

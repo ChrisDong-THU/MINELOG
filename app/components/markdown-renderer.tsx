@@ -219,48 +219,6 @@ export function MarkdownRenderer({
     ...components,
   }), [components, editableImages, onImageWidthChange]);
 
-  useEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
-
-    let frame = 0;
-    let disposed = false;
-    const fitDisplayMath = () => {
-      root.querySelectorAll<HTMLElement>(".katex-display").forEach((display) => {
-        const formula = display.querySelector<HTMLElement>(":scope > .katex");
-        if (!formula) return;
-
-        formula.style.removeProperty("font-size");
-        display.classList.remove("is-scaled");
-
-        const availableWidth = display.clientWidth;
-        const naturalWidth = formula.getBoundingClientRect().width;
-        if (availableWidth > 0 && naturalWidth > availableWidth) {
-          const ratio = availableWidth / naturalWidth;
-          formula.style.fontSize = `${1.21 * ratio}em`;
-          display.classList.add("is-scaled");
-        }
-      });
-    };
-
-    const scheduleFit = () => {
-      if (disposed) return;
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(fitDisplayMath);
-    };
-
-    scheduleFit();
-    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(scheduleFit);
-    resizeObserver?.observe(root);
-    document.fonts?.ready.then(scheduleFit);
-
-    return () => {
-      disposed = true;
-      cancelAnimationFrame(frame);
-      resizeObserver?.disconnect();
-    };
-  }, [markdown]);
-
   const handleDoubleClick = (event: MouseEvent<HTMLElement>) => {
     if (!onSourceActivate || !(event.target instanceof Element)) return;
     if (event.target.closest("a, button, input, textarea, select")) return;

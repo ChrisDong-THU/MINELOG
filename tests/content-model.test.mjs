@@ -33,5 +33,6 @@ test("载入存储时按永久文章 ID 清理历史重复记录", () => {
 
   assert.equal(content.articles.notes.length, 1);
   assert.equal(content.articles.notes[0].title, "重命名后的标题");
+  assert.equal(content.articles.notes[0].author, "未署名");
   assert.equal(content.markdown[ARTICLE_ID], "new body");
 });

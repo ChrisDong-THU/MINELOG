@@ -1,6 +1,7 @@
 "use client";
 
-import { Children, isValidElement, useEffect, useMemo, type MouseEvent, type ReactNode } from "react";
+import { Children, isValidElement, useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
+import { recordArticleView } from "../article-views";
 import type { Section, SectionArticle } from "../content-types";
 import { MINECRAFT_UI_ICONS } from "../minecraft-icons";
 import { MarkdownRenderer } from "./markdown-renderer";
@@ -59,6 +60,16 @@ function buildTableOfContents(markdown: string): TocItem[] {
 
 export function ArticleReader({ section, article, markdown, onBack }: { section: ReaderSection; article: SectionArticle; markdown: string; onBack: () => void }) {
   const toc = useMemo(() => buildTableOfContents(markdown), [markdown]);
+  const [viewState, setViewState] = useState<{ articleId: string; views: number } | null>(null);
+  const views = viewState?.articleId === article.id ? viewState.views : null;
+
+  useEffect(() => {
+    let active = true;
+    void recordArticleView(article.id).then((value) => {
+      if (active) setViewState({ articleId: article.id, views: value });
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [article.id]);
 
   useEffect(() => {
     const syncHash = () => window.requestAnimationFrame(() => {
@@ -117,13 +128,14 @@ export function ArticleReader({ section, article, markdown, onBack }: { section:
         <section className="reader-overview">
           <div className="reader-section-mark">
             <span className="reader-section-icon"><img src={section.icon} alt="" /></span>
-            <span><small>KNOWLEDGE SECTOR</small><strong>{section.label}</strong></span>
+            <span className="reader-section-copy"><small>板块</small><strong>{section.label}</strong></span>
           </div>
           <dl className="reader-details">
-            <div><dt>更新时间</dt><dd>2026.{article.date}</dd></div>
-            <div><dt>预计阅读</dt><dd>{article.read}</dd></div>
+            <div className="reader-detail-author"><dt>by</dt><dd title={article.author}>{article.author}</dd></div>
+            <div><dt>更新</dt><dd>2026.{article.date}</dd></div>
+            <div><dt>浏览</dt><dd>{views === null ? "—" : views.toLocaleString("zh-CN")}</dd></div>
           </dl>
-          <div className="reader-tags" aria-label="文章标签">{article.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
+          {article.tags.length > 0 && <div className="reader-tags" aria-label="文章标签">{article.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
 
         </section>
 

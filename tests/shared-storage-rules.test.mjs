@@ -43,6 +43,7 @@ test("编辑鉴权只保护内容写接口", () => {
   assert.equal(isProtectedEditorMutation(new Request("https://example.com/api/sections", { method: "DELETE" })), true);
   assert.equal(isProtectedEditorMutation(new Request("https://example.com/api/local-articles")), false);
   assert.equal(isProtectedEditorMutation(new Request("https://example.com/api/editor-auth", { method: "POST" })), false);
+  assert.equal(isProtectedEditorMutation(new Request("https://example.com/api/article-views?id=11111111-1111-4111-8111-111111111111", { method: "POST" })), false);
 });
 
 test("stored image references are unique per article and counted across articles", () => {
@@ -196,6 +197,15 @@ test("local storage preserves shared images until the final reference is removed
     const sharedMarkdown = `![shared](${sharedUrl})`;
     assert.equal((await saveArticle(firstId, "First", sharedMarkdown)).status, 200);
     assert.equal((await saveArticle(secondId, "Second", sharedMarkdown)).status, 200);
+
+    const initialViews = await fetch(`${origin}/api/article-views?id=${firstId}`);
+    assert.equal(initialViews.status, 200);
+    assert.equal((await initialViews.json()).views, 0);
+    const countedView = await fetch(`${origin}/api/article-views?id=${firstId}`, { method: "POST", headers: { origin } });
+    assert.equal(countedView.status, 200);
+    assert.equal((await countedView.json()).views, 1);
+    const storedViews = JSON.parse(await readFile(join(projectRoot, "content", "local", "state", "article-views.json"), "utf8"));
+    assert.equal(storedViews[firstId], 1);
 
     assert.equal((await saveArticle(firstId, "First", sharedMarkdown, [], "archive")).status, 200);
     const storedArticle = await readFile(join(projectRoot, "content", "local", "articles", `${firstId}.md`), "utf8");

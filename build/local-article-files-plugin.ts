@@ -8,8 +8,10 @@ import {
   imageAssetReferenceCounts,
   storedImageAssetFileName,
 } from "../shared/image-assets.ts";
+import { articleAuthor } from "../shared/article-metadata.ts";
 
 const API_PATH = "/api/local-articles";
+const ARTICLE_VIEWS_PATH = "/api/article-views";
 const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
 const ARTICLE_FILE_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.md$/i;
 
@@ -17,6 +19,7 @@ export type LocalArticleFile = {
   id: string;
   sectionId: string;
   title: string;
+  author: string;
   summary: string;
   date: string;
   read: string;
@@ -71,6 +74,14 @@ function cleanText(value: unknown, field: string, maxLength: number) {
   return cleaned;
 }
 
+function cleanOptionalText(value: unknown, field: string, maxLength: number) {
+  if (value === undefined) return "";
+  if (typeof value !== "string") throw new Error(`${field}格式不正确`);
+  const cleaned = value.replace(/\r\n?/g, "\n").trim();
+  if (cleaned.length > maxLength) throw new Error(`${field}长度不合法`);
+  return cleaned;
+}
+
 function normalizeArticle(value: unknown): LocalArticleFile & { updatedAt: string } {
   if (!value || typeof value !== "object") throw new Error("文章数据格式不正确");
   const source = value as Record<string, unknown>;
@@ -83,7 +94,8 @@ function normalizeArticle(value: unknown): LocalArticleFile & { updatedAt: strin
     id: safeArticleId(source.id),
     sectionId: safeSectionId(source.sectionId),
     title: cleanText(source.title, "文章标题", 240),
-    summary: cleanText(source.summary, "文章副标题", 600),
+    author: articleAuthor(cleanOptionalText(source.author, "作者", 80)),
+    summary: cleanOptionalText(source.summary, "文章副标题", 600),
     date: cleanText(source.date, "更新日期", 32),
     read: cleanText(source.read, "阅读时长", 32),
     tags,
@@ -101,6 +113,7 @@ function serialize(article: LocalArticleFile & { updatedAt: string }) {
     "---",
     `id: ${scalar(article.id)}`,
     `title: ${scalar(article.title)}`,
+    `author: ${scalar(article.author)}`,
     `summary: ${scalar(article.summary)}`,
     `section: ${scalar(article.sectionId)}`,
     `date: ${scalar(article.date)}`,
@@ -137,6 +150,7 @@ function parseArticle(filePath: string, source: string): ArticleFileRecord | nul
       id: metadata.id,
       sectionId: metadata.section,
       title: metadata.title,
+      author: articleAuthor(metadata.author),
       summary: metadata.summary,
       date: metadata.date,
       read: metadata.read,
@@ -197,6 +211,34 @@ async function initialized(markerPath: string) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
     throw error;
   }
+}
+
+async function readArticleViews(filePath: string) {
+  try {
+    const value = JSON.parse(await readFile(filePath, "utf8")) as unknown;
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {} as Record<string, number>;
+    return Object.fromEntries(Object.entries(value).flatMap(([id, count]) => (
+      /^[0-9a-f-]{36}$/i.test(id) && typeof count === "number" && Number.isSafeInteger(count) && count >= 0 ? [[id, count]] : []
+    )));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return {} as Record<string, number>;
+    throw error;
+  }
+}
+
+async function writeArticleViews(filePath: string, views: Record<string, number>) {
+  await mkdir(dirname(filePath), { recursive: true });
+  const temporary = `${filePath}.${Date.now()}.tmp`;
+  await writeFile(temporary, JSON.stringify(views, null, 2), "utf8");
+  await rm(filePath, { force: true });
+  await rename(temporary, filePath);
+}
+
+function localRequestSameOrigin(req: IncomingMessage) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  const protocol = "encrypted" in req.socket ? "https" : "http";
+  return origin === `${protocol}://${req.headers.host}`;
 }
 
 async function saveOne(root: string, value: unknown, cleanupAssetUrls: unknown = []) {
@@ -263,6 +305,7 @@ function publicArticles(records: ArticleFileRecord[]) {
 
 export function localArticleFiles(): Plugin {
   let root = process.cwd();
+  let viewWriteQueue: Promise<unknown> = Promise.resolve();
   return {
     name: "minelog-local-article-files",
     apply: "serve",
@@ -271,10 +314,34 @@ export function localArticleFiles(): Plugin {
     },
     configureServer(server) {
       const markerPath = join(root, "state", "initialized.json");
+      const articleViewsPath = join(root, "state", "article-views.json");
       server.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url ?? "/", "http://localhost");
-        if (url.pathname !== API_PATH) return next();
+        if (url.pathname !== API_PATH && url.pathname !== ARTICLE_VIEWS_PATH) return next();
         try {
+          if (url.pathname === ARTICLE_VIEWS_PATH) {
+            if (req.method !== "GET" && req.method !== "POST") {
+              res.setHeader("allow", "GET, POST");
+              return json(res, 405, { error: "不支持的请求方法" });
+            }
+            const articleId = safeArticleId(url.searchParams.get("id"));
+            const records = await readAll(root);
+            if (!records.some((record) => record.id === articleId)) return json(res, 404, { error: "文章不存在" });
+            if (req.method === "GET") {
+              const views = await readArticleViews(articleViewsPath);
+              return json(res, 200, { views: views[articleId] ?? 0 });
+            }
+            if (!localRequestSameOrigin(req)) return json(res, 403, { error: "访问来源不合法" });
+            const update = viewWriteQueue.catch(() => undefined).then(async () => {
+              const views = await readArticleViews(articleViewsPath);
+              const next = Math.min(Number.MAX_SAFE_INTEGER, (views[articleId] ?? 0) + 1);
+              views[articleId] = next;
+              await writeArticleViews(articleViewsPath, views);
+              return next;
+            });
+            viewWriteQueue = update;
+            return json(res, 200, { views: await update });
+          }
           if (req.method === "GET") {
             const records = await readAll(root);
             const articleId = url.searchParams.get("id");
@@ -305,6 +372,16 @@ export function localArticleFiles(): Plugin {
             const remaining = records.filter((record) => !matches.includes(record));
             const cleanupCandidates = matches.flatMap(recordAssetKeys);
             await Promise.all(matches.map((record) => rm(record.filePath, { force: true })));
+            if (matches.length) {
+              const cleanupViews = viewWriteQueue.catch(() => undefined).then(async () => {
+                const views = await readArticleViews(articleViewsPath);
+                let changed = false;
+                for (const record of matches) changed = delete views[record.id] || changed;
+                if (changed) await writeArticleViews(articleViewsPath, views);
+              });
+              viewWriteQueue = cleanupViews;
+              await cleanupViews;
+            }
             await deleteUnreferencedAssets(root, cleanupCandidates, remaining);
             return json(res, 200, { deleted: matches.length });
           }

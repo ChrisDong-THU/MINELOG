@@ -80,7 +80,8 @@ test("R2 uses permanent UUID article identity and rejects same-section duplicate
     id: firstId,
     sectionId: "notes",
     title: "永久身份",
-    summary: "初始版本",
+    author: "",
+    summary: "",
     date: "08.06",
     read: "1 MIN",
     tags: [],
@@ -116,7 +117,51 @@ test("R2 uses permanent UUID article identity and rejects same-section duplicate
   const loadedBody = await loaded.json();
   assert.equal(loadedBody.article.id, firstId);
   assert.equal(loadedBody.article.title, "重命名后");
+  assert.equal(loadedBody.article.author, "未署名");
+  assert.equal(loadedBody.article.summary, "");
   assert.equal(loadedBody.article.sectionId, "archive");
+});
+
+test("R2 records article views without editor authorization and rejects cross-origin increments", async () => {
+  const bucket = new MemoryBucket();
+  const id = "77777777-7777-4777-8777-777777777777";
+  const article = {
+    id,
+    sectionId: "notes",
+    title: "阅读统计",
+    author: "",
+    summary: "",
+    date: "08.26",
+    read: "1 MIN",
+    tags: [],
+    markdown: "body",
+    updatedAt: "2026-08-26T08:00:00.000Z",
+  };
+  const saved = await handleR2ContentRequest(new Request("https://minelog.example/api/local-articles", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ article }),
+  }), bucket);
+  assert.equal(saved?.status, 200);
+
+  const initial = await handleR2ContentRequest(new Request(`https://minelog.example/api/article-views?id=${id}`), bucket);
+  assert.equal(initial?.status, 200);
+  assert.equal((await initial.json()).views, 0);
+
+  const counted = await handleR2ContentRequest(new Request(`https://minelog.example/api/article-views?id=${id}`, {
+    method: "POST",
+    headers: { origin: "https://minelog.example" },
+  }), bucket);
+  assert.equal(counted?.status, 200);
+  assert.equal((await counted.json()).views, 1);
+
+  const rejected = await handleR2ContentRequest(new Request(`https://minelog.example/api/article-views?id=${id}`, {
+    method: "POST",
+    headers: { origin: "https://other.example" },
+  }), bucket);
+  assert.equal(rejected?.status, 403);
+  const unchanged = await handleR2ContentRequest(new Request(`https://minelog.example/api/article-views?id=${id}`), bucket);
+  assert.equal((await unchanged.json()).views, 1);
 });
 test("R2 validates the complete initial article set before writing objects", async () => {
   const bucket = new MemoryBucket();

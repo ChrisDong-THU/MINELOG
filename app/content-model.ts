@@ -1,5 +1,6 @@
 import type { ContentState, SearchDocument, Section, SectionArticle } from "./content-types";
 import type { LocalArticleFile } from "./local-article-files";
+import { articleAuthor } from "../shared/article-metadata.ts";
 
 export const EMPTY_CONTENT_STATE: ContentState = { articles: {}, markdown: {} };
 function fallbackMarkdown(article: SectionArticle) {
@@ -61,6 +62,7 @@ export function contentFromLocalFiles(files: LocalArticleFile[]): ContentState {
     const article: SectionArticle = {
       id: file.id,
       title: file.title,
+      author: articleAuthor(file.author),
       summary: file.summary,
       date: file.date,
       read: file.read,

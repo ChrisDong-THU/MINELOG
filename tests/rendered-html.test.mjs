@@ -32,7 +32,7 @@ test("server renders the MINELOG application shell", async () => {
 });
 
 test("keeps navigation, rendering and local content storage in focused modules", async () => {
-  const [page, navigation, storage, renderer, resizableImage, searchPage, layout, fileClient, filePlugin, assetClient, assetPlugin, editor, toolbar, articleReader, contentModel, hotbarModel, gitignore, minecraftIcons, sectionEditor, imageAssets, gameModal, r2Content] = await Promise.all([
+  const [page, navigation, storage, renderer, resizableImage, searchPage, layout, fileClient, filePlugin, assetClient, assetPlugin, editor, toolbar, articleReader, articleViews, contentModel, hotbarModel, gitignore, minecraftIcons, sectionEditor, imageAssets, gameModal, r2Content] = await Promise.all([
     source("app/page.tsx"),
     source("app/navigation.ts"),
     source("app/browser-storage.ts"),
@@ -47,6 +47,7 @@ test("keeps navigation, rendering and local content storage in focused modules",
     source("app/components/article-editor.tsx"),
     source("app/components/markdown-editor-toolbar.tsx"),
     source("app/components/article-reader.tsx"),
+    source("app/article-views.ts"),
     source("app/content-model.ts"),
     source("app/hotbar-model.ts"),
     source(".gitignore"),
@@ -193,6 +194,9 @@ test("keeps navigation, rendering and local content storage in focused modules",
   assert.doesNotMatch(readerStyles, /overflow-wrap: anywhere|line-break: anywhere/);
   assert.match(readerStyles, /\.markdown-body :not\(pre\) > code \{[^}]*overflow-wrap: normal;[^}]*word-break: normal;[^}]*white-space: nowrap;/s);
   assert.match(readerStyles, /\.markdown-body :not\(\.katex-display\) > \.katex \{[^}]*overflow-wrap: normal;[^}]*word-break: normal;[^}]*white-space: nowrap;/s);
+  assert.match(readerStyles, /\.markdown-body \.katex-display \{[^}]*overflow-x: auto;[^}]*overflow-y: hidden;/s);
+  assert.match(readerStyles, /\.markdown-body \.katex-display > \.katex \{[^}]*width: max-content;[^}]*min-width: 100%;[^}]*max-width: none;/s);
+  assert.doesNotMatch(renderer, /fitDisplayMath|is-scaled|formula\.style\.fontSize/);
   assert.doesNotMatch(readerStyles, /\.markdown-body :not\(pre\) > code \{[^}]*(?:display|max-width|overflow-x|vertical-align|scrollbar-width):/s);
   assert.doesNotMatch(readerStyles, /\.markdown-body :not\(\.katex-display\) > \.katex \{[^}]*(?:display|max-width|overflow-x|vertical-align):/s);
   assert.match(renderer, /markdown-code-header/);
@@ -211,6 +215,34 @@ test("keeps navigation, rendering and local content storage in focused modules",
   assert.match(readerStyles, /padding: 17px 19px 15px/);
   assert.match(readerStyles, /\.markdown-code-copy \{[^}]*border: 0[^}]*background: transparent[^}]*box-shadow: none/s);
   assert.match(readerStyles, /\.markdown-code-copy:focus-visible \{ box-shadow: none; \}/);
+  assert.match(editor, /<span>作者<\/span>/);
+  assert.match(editor, /<input value=\{author\}[^\n]*maxLength=\{80\}/);
+  assert.match(editor, /if \(!title\.trim\(\)\)/);
+  assert.match(editor, /author: articleAuthor\(author\)/);
+  assert.match(editor, /disabled=\{!title\.trim\(\)\}/);
+  assert.match(
+    editor,
+    /className="editor-field editor-title-field"[\s\S]*文章大标题[\s\S]*className="editor-field-grid editor-summary-grid"[\s\S]*文章副标题[\s\S]*文章标签[\s\S]*className="editor-field-grid"[\s\S]*归属板块[\s\S]*作者/,
+  );
+  assert.match(articleReader, /className="reader-detail-author"><dt>by<\/dt><dd title=\{article\.author\}>\{article\.author\}<\/dd>/);
+  assert.match(articleReader, /className="reader-section-copy"><small>板块<\/small><strong>\{section\.label\}<\/strong>/);
+  assert.match(readerStyles, /\.reader-details \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/s);
+  assert.match(readerStyles, /\.reader-details \{[^}]*margin: 0 8px/s);
+  assert.match(readerStyles, /\.reader-details div \{[^}]*padding: 0 7px[^}]*text-align: center/s);
+  assert.match(articleReader, /<dt>浏览<\/dt><dd>\{views === null \? "—" : views\.toLocaleString\("zh-CN"\)\}<\/dd>/);
+  assert.doesNotMatch(articleReader, /<dd>\{article\.read\}<\/dd>/);
+  assert.match(articleViews, /window\.sessionStorage\.getItem\(sessionKey\) === "1"/);
+  assert.match(articleViews, /method: counted \? "GET" : "POST"/);
+  assert.match(articleViews, /const pendingViews = new Map<string, Promise<number>>\(\)/);
+  assert.match(articleViews, /pendingViews\.get\(articleId\)/);
+  assert.match(filePlugin, /ARTICLE_VIEWS_PATH = "\/api\/article-views"/);
+  assert.match(r2Content, /ARTICLE_VIEWS_API = "\/api\/article-views"/);
+  assert.match(contentModel, /author: articleAuthor\(file\.author\)/);
+  assert.match(filePlugin, /`author: \$\{scalar\(article\.author\)\}`/);
+  assert.match(filePlugin, /author: articleAuthor\(cleanOptionalText\(source\.author, "作者", 80\)\)/);
+  assert.match(filePlugin, /summary: cleanOptionalText\(source\.summary, "文章副标题", 600\)/);
+  assert.match(r2Content, /author: articleAuthor\(cleanOptionalText\(source\.author, "作者", 80\)\)/);
+  assert.match(r2Content, /summary: cleanOptionalText\(source\.summary, "文章副标题", 600\)/);
   assert.match(searchPage, /slice\(0, 7\)/);
   assert.match(searchPage, /b\.count - a\.count/);
   assert.match(sectionPage, /SectionUiIcon/);

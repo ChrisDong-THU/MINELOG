@@ -10,6 +10,7 @@ export type Section = {
 export type SectionArticle = {
   id: string;
   title: string;
+  author: string;
   summary: string;
   date: string;
   read: string;

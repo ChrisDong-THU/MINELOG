@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
+import { articleAuthor } from "../../shared/article-metadata";
 import type { Section } from "../content-types";
 import { MINECRAFT_UI_ICONS } from "../minecraft-icons";
 import { saveLocalArticleImage } from "../local-article-assets";
@@ -13,6 +14,7 @@ export type ArticleEditorValue = {
   id: string;
   sectionId: string;
   title: string;
+  author: string;
   summary: string;
   tags: string[];
   markdown: string;
@@ -96,6 +98,7 @@ export function ArticleEditor({
 }) {
   const [sectionId, setSectionId] = useState(initialValue.sectionId);
   const [title, setTitle] = useState(initialValue.title);
+  const [author, setAuthor] = useState(initialValue.author);
   const [summary, setSummary] = useState(initialValue.summary);
   const [tags, setTags] = useState(initialValue.tags.join("，"));
   const [markdown, setMarkdown] = useState(initialValue.markdown || STARTER_MARKDOWN);
@@ -131,6 +134,7 @@ export function ArticleEditor({
   }, [markdown]);
   const isDirty = sectionId !== initialValue.sectionId
     || title !== initialValue.title
+    || author !== initialValue.author
     || summary !== initialValue.summary
     || tags !== initialValue.tags.join("，")
     || markdown !== (initialValue.markdown || STARTER_MARKDOWN);
@@ -423,7 +427,7 @@ export function ArticleEditor({
   };
 
   const submit = async () => {
-    if (!title.trim() || !summary.trim()) {
+    if (!title.trim()) {
       setDetailsOpen(true);
       return;
     }
@@ -433,6 +437,7 @@ export function ArticleEditor({
         id: initialValue.id,
         sectionId,
         title: title.trim(),
+        author: articleAuthor(author),
         summary: summary.trim(),
         tags: tags.split(/[，,]/).map((tag) => tag.trim()).filter(Boolean),
         markdown: markdownRef.current,
@@ -555,7 +560,7 @@ export function ArticleEditor({
       <div className="editor-actions">
         {mode === "edit" && onDelete && <button type="button" className="editor-delete-button" onClick={() => setDeleteConfirm(true)}>删除文章</button>}
         <button type="button" className="editor-quiet-button" onClick={onCancel}>取消</button>
-        <button type="button" className="editor-save-button" onClick={submit} disabled={!title.trim() || !summary.trim()}>保存文章</button>
+        <button type="button" className="editor-save-button" onClick={submit} disabled={!title.trim()}>保存文章</button>
       </div>
     </header>
 
@@ -579,12 +584,26 @@ export function ArticleEditor({
             <small>ARTICLE DETAILS</small>
             <strong>文章基本信息</strong>
           </span>
-          <span className="editor-meta-button-summary">{title.trim() || "设置板块、标题、副标题与标签"}</span>
+          <span className="editor-meta-button-summary">{title.trim() || "设置板块、作者与文章信息"}</span>
           <i className="editor-meta-chevron" aria-hidden="true" />
         </button>
         <div id="article-editor-details" className="editor-meta-body" aria-hidden={!detailsOpen} inert={!detailsOpen}>
           <div className="editor-meta-body-inner">
             <div className="editor-meta-fields">
+              <label className="editor-field editor-title-field">
+                <span>文章大标题</span>
+                <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="输入文章标题" />
+              </label>
+              <div className="editor-field-grid editor-summary-grid">
+                <label className="editor-field">
+                  <span>文章副标题</span>
+                  <input value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="用一句话说明这篇文章" />
+                </label>
+                <label className="editor-field">
+                  <span>文章标签</span>
+                  <input value={tags} onChange={(event) => setTags(event.target.value)} placeholder="例如：RAG，性能" />
+                </label>
+              </div>
               <div className="editor-field-grid">
                 <div className="editor-field">
                   <span>归属板块</span>
@@ -597,18 +616,10 @@ export function ArticleEditor({
                   />
                 </div>
                 <label className="editor-field">
-                  <span>文章标签</span>
-                  <input value={tags} onChange={(event) => setTags(event.target.value)} placeholder="例如：RAG，性能" />
+                  <span>作者</span>
+                  <input value={author} onChange={(event) => setAuthor(event.target.value)} maxLength={80} placeholder="输入作者或署名" />
                 </label>
               </div>
-              <label className="editor-field">
-                <span>文章大标题</span>
-                <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="输入文章标题" />
-              </label>
-              <label className="editor-field">
-                <span>文章副标题</span>
-                <input value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="用一句话说明这篇文章" />
-              </label>
             </div>
           </div>
         </div>
