@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
 import { articleAuthor } from "../../shared/article-metadata";
+import { resolveArticleSubtitle } from "../article-subtitle";
 import type { Section } from "../content-types";
 import { MINECRAFT_UI_ICONS } from "../minecraft-icons";
 import { saveLocalArticleImage } from "../local-article-assets";
@@ -100,6 +101,7 @@ export function ArticleEditor({
   const [title, setTitle] = useState(initialValue.title);
   const [author, setAuthor] = useState(initialValue.author);
   const [summary, setSummary] = useState(initialValue.summary);
+  const [fallbackSubtitle, setFallbackSubtitle] = useState(() => resolveArticleSubtitle("", () => 0));
   const [tags, setTags] = useState(initialValue.tags.join("，"));
   const [markdown, setMarkdown] = useState(initialValue.markdown || STARTER_MARKDOWN);
   const [mobilePane, setMobilePane] = useState<"edit" | "preview">("edit");
@@ -126,7 +128,17 @@ export function ArticleEditor({
     lastKind: "typing" | "command" | null;
     lastInputAt: number;
   }>({ undo: [], redo: [], lastKind: null, lastInputAt: 0 });
+  const randomizedSubtitleFor = useRef<string | null>(null);
   const selectedSection = sections.find((section) => section.id === sectionId) ?? sections[0];
+
+  useEffect(() => {
+    if (randomizedSubtitleFor.current === initialValue.id) return;
+    randomizedSubtitleFor.current = initialValue.id;
+    setFallbackSubtitle(resolveArticleSubtitle(""));
+  }, [initialValue.id]);
+  const previewSubtitle = summary.trim()
+    ? resolveArticleSubtitle(summary)
+    : fallbackSubtitle;
   const originalSection = sections.find((section) => section.id === initialValue.sectionId);
   const stats = useMemo(() => {
     const characters = markdown.replace(/\s/g, "").length;
@@ -654,7 +666,10 @@ export function ArticleEditor({
       <section className="editor-preview" aria-label="文章实时预览">
         <header className="editor-preview-header">
           <h2>{title || "未命名文章"}</h2>
-          <p>{summary || "文章副标题会显示在这里。"}</p>
+          <p>{previewSubtitle.kind === "summary" ? previewSubtitle.text : <>
+            <span className="article-subtitle-quote">{previewSubtitle.text}</span>
+            <span className="article-subtitle-attribution">— {previewSubtitle.author}</span>
+          </>}</p>
         </header>
         <MarkdownRenderer
           markdown={markdown}

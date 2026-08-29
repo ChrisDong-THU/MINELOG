@@ -73,6 +73,13 @@
   font-size: 13px;
   line-height: 1.75;
 }
+.article-subtitle-quote { color: rgba(232, 236, 229, .78); }
+.article-subtitle-attribution {
+  display: inline-block;
+  margin-inline-start: .48em;
+  color: #a9c47a;
+  white-space: nowrap;
+}
 .reader-meta {
   display: flex;
   flex-wrap: wrap;

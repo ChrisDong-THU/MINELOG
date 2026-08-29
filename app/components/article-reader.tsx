@@ -1,6 +1,7 @@
 "use client";
 
-import { Children, isValidElement, useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
+import { Children, isValidElement, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { resolveArticleSubtitle } from "../article-subtitle";
 import { recordArticleView } from "../article-views";
 import type { Section, SectionArticle } from "../content-types";
 import { MINECRAFT_UI_ICONS } from "../minecraft-icons";
@@ -60,8 +61,16 @@ function buildTableOfContents(markdown: string): TocItem[] {
 
 export function ArticleReader({ section, article, markdown, onBack }: { section: ReaderSection; article: SectionArticle; markdown: string; onBack: () => void }) {
   const toc = useMemo(() => buildTableOfContents(markdown), [markdown]);
+  const [fallbackSubtitle, setFallbackSubtitle] = useState(() => resolveArticleSubtitle("", () => 0));
+  const randomizedSubtitleFor = useRef<string | null>(null);
   const [viewState, setViewState] = useState<{ articleId: string; views: number } | null>(null);
   const views = viewState?.articleId === article.id ? viewState.views : null;
+
+  useEffect(() => {
+    if (randomizedSubtitleFor.current === article.id) return;
+    randomizedSubtitleFor.current = article.id;
+    setFallbackSubtitle(resolveArticleSubtitle(""));
+  }, [article.id]);
 
   useEffect(() => {
     let active = true;
@@ -106,13 +115,19 @@ export function ArticleReader({ section, article, markdown, onBack }: { section:
     const id = slugify(title);
     return <Tag id={id}>{children}<a className="heading-anchor" onClick={(event) => navigateToHeading(event, id)} href={`#${id}`} aria-label={`定位到${title}`}>#</a></Tag>;
   };
+  const subtitle = article.summary.trim()
+    ? resolveArticleSubtitle(article.summary)
+    : fallbackSubtitle;
 
   return <div className="reader-page">
     <header className="reader-header">
       <button className="reader-back" onClick={onBack}><img src={MINECRAFT_UI_ICONS.back} alt="" /><span>返回 {section.label}</span></button>
       <div className="reader-category"><img src={section.icon} alt="" /><span>{section.label}</span></div>
       <h1>{article.title}</h1>
-      <p>{article.summary}</p>
+      <p>{subtitle.kind === "summary" ? subtitle.text : <>
+        <span className="article-subtitle-quote">{subtitle.text}</span>
+        <span className="article-subtitle-attribution">— {subtitle.author}</span>
+      </>}</p>
     </header>
 
     <div className="reader-layout">
