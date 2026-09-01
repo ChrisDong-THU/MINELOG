@@ -9,6 +9,7 @@ import { transformMarkdownTable, type MarkdownTableAction } from "../markdown-ta
 import { MINECRAFT_UI_ICONS } from "../minecraft-icons";
 import { saveLocalArticleImage } from "../local-article-assets";
 import { GameModal } from "./game-modal";
+import { ContentLoadingState } from "./content-loading-state";
 import { GameSelect } from "./game-select";
 import { MarkdownEditorToolbar, type MarkdownEditorCommand, type MarkdownInsertKind } from "./markdown-editor-toolbar";
 import { MarkdownRenderer, type MarkdownSourceRange } from "./markdown-renderer";
@@ -96,7 +97,7 @@ export function ArticleEditor({
   initialValue: ArticleEditorValue;
   onCancel: () => void;
   onSave: (value: ArticleEditorValue) => void | Promise<void>;
-  onDelete?: () => void;
+  onDelete?: () => void | Promise<void>;
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [sectionId, setSectionId] = useState(initialValue.sectionId);
@@ -115,7 +116,7 @@ export function ArticleEditor({
   const [tableRows, setTableRows] = useState(2);
   const [tableColumns, setTableColumns] = useState(3);
   const [pasteError, setPasteError] = useState("");
-  const [savingArticle, setSavingArticle] = useState(false);
+  const [waitingMessage, setWaitingMessage] = useState("");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [historyStatus, setHistoryStatus] = useState({ canUndo: false, canRedo: false });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -481,11 +482,12 @@ export function ArticleEditor({
   };
 
   const submit = async () => {
+    if (waitingMessage) return;
     if (!title.trim()) {
       setDetailsOpen(true);
       return;
     }
-    setSavingArticle(true);
+    setWaitingMessage("正在保存文章正文…");
     try {
       await onSave({
         id: initialValue.id,
@@ -498,7 +500,17 @@ export function ArticleEditor({
         uploadedAssetUrls: [...uploadedAssetUrls.current],
       });
     } finally {
-      setSavingArticle(false);
+      setWaitingMessage("");
+    }
+  };
+
+  const removeArticle = async () => {
+    if (!onDelete || waitingMessage) return;
+    setWaitingMessage("正在删除文章…");
+    try {
+      await onDelete();
+    } finally {
+      setWaitingMessage("");
     }
   };
 
@@ -510,7 +522,7 @@ export function ArticleEditor({
         && event.key.toLowerCase() === "s";
       if (!isSaveShortcut) return;
       event.preventDefault();
-      if (event.repeat || savingArticle || deleteConfirm || insertDialog || tableDialog) return;
+      if (event.repeat || waitingMessage || deleteConfirm || insertDialog || tableDialog) return;
       void submit();
     };
     window.addEventListener("keydown", handleSaveShortcut);
@@ -602,7 +614,7 @@ export function ArticleEditor({
     }
   };
 
-  if (savingArticle) return <div className="content-loading-state" role="status">{"\u6B63\u5728\u4FDD\u5B58\u6587\u7AE0\u6B63\u6587\u2026"}</div>;
+  if (waitingMessage) return <ContentLoadingState>{waitingMessage}</ContentLoadingState>;
 
   return <div className="editor-page">
     <header className="editor-header">
@@ -731,7 +743,7 @@ export function ArticleEditor({
       description="删除后文章正文和本地修改记录将一并移除，此操作无法撤销。"
       icon={MINECRAFT_UI_ICONS.delete}
       onClose={() => setDeleteConfirm(false)}
-      footer={<><button type="button" className="pixel-button" onClick={() => setDeleteConfirm(false)}>保留文章</button><button type="button" className="pixel-button editor-delete-confirm" onClick={onDelete}>确认删除</button></>}
+      footer={<><button type="button" className="pixel-button" onClick={() => setDeleteConfirm(false)}>保留文章</button><button type="button" className="pixel-button editor-delete-confirm" onClick={() => void removeArticle()}>确认删除</button></>}
     >
       <div className="editor-delete-summary"><span>即将删除</span><strong>{initialValue.title}</strong><small>{originalSection?.label}</small></div>
     </GameModal>}

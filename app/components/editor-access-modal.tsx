@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent, type KeyboardEvent } from "react";
 import { verifyEditorAccess } from "../editor-auth-client";
 import { GameModal } from "./game-modal";
+import { AnimatedLoadingText } from "./content-loading-state";
 
 const DIGIT_COUNT = 6;
 
@@ -114,7 +115,7 @@ export function EditorAccessModal({ onAuthorized, onClose }: { onAuthorized: () 
           />)}
         </div>
       </fieldset>
-      <p className={`editor-access-feedback${error ? " is-error" : ""}`} id="editor-access-feedback" role={error ? "alert" : "status"}>{error || (submitting ? "正在验证密钥…" : "输入完成后自动验证")}</p>
+      <p className={`editor-access-feedback${error ? " is-error" : ""}`} id="editor-access-feedback" role={error ? "alert" : "status"}>{error || (submitting ? <AnimatedLoadingText>正在验证密钥…</AnimatedLoadingText> : "输入完成后自动验证")}</p>
     </form>
   </GameModal>;
 }

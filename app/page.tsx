@@ -21,6 +21,7 @@ import { HomeBackdrop } from "./components/home-backdrop";
 import { VisitorGlobe } from "./components/visitor-globe";
 import { SectionPage } from "./components/section-page";
 import { SearchPage } from "./components/search-page";
+import { ContentLoadingState } from "./components/content-loading-state";
 import {
   articleMarkdownKey,
   contentToLocalFiles,
@@ -49,14 +50,6 @@ function createSectionId() {
 }
 function Item({ src, alt = "" }: { src: string; alt?: string }) {
   return <img className="pixel-item" src={src} alt={alt} draggable={false} />;
-}
-
-function ContentLoadingState({ children }: { children: string }) {
-  return <div className="content-loading-state" role="status">
-    <span className="content-loading-label" aria-label={children}>
-      {Array.from(children).map((character, index) => <span aria-hidden="true" style={{ animationDelay: `${index * 70}ms` }} key={`${character}-${index}`}>{character}</span>)}
-    </span>
-  </div>;
 }
 
 type NavigationLock = { current: boolean };
