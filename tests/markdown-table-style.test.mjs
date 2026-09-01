@@ -37,14 +37,18 @@ test("更新和清空表格样式时复用同一元数据位置", () => {
   assert.deepEqual(readMarkdownTableStyle(second.markdown, table.length).style.widths, [160, 160]);
   assert.equal(readMarkdownTableStyle(second.markdown, table.length).style.tableAlign, "right");
 
-  const cleared = writeMarkdownTableStyle(second.markdown, table.length, { widths: [], dark: [], bold: [], align: {}, tableAlign: "left", headerRow: false, headerColumn: false });
+  const cleared = writeMarkdownTableStyle(second.markdown, table.length, { widths: [], dark: [], bold: [], align: {}, tableAlign: "left", headerRow: true, headerColumn: false });
   assert.equal(cleared.markdown.includes("minelog-table:"), false);
   assert.equal(cleared.markdown.startsWith(table), true);
+
+  const withoutHeader = writeMarkdownTableStyle(cleared.markdown, table.length, { widths: [], dark: [], bold: [], align: {}, tableAlign: "left", headerRow: false, headerColumn: false });
+  assert.equal(readMarkdownTableStyle(withoutHeader.markdown, table.length).style.headerRow, false);
+  assert.equal(withoutHeader.markdown.includes('"headerRow":false'), true);
 });
 
 test("单元格样式键经过校验并支持批量切换", () => {
   const normalized = normalizeMarkdownTableStyle({ widths: [12, 1200, "bad"], dark: ["2:1", "bad", "2:1"], bold: [] });
-  assert.deepEqual(normalized, { widths: [48, 800], dark: ["2:1"], bold: [], align: {}, tableAlign: "left", headerRow: false, headerColumn: false });
+  assert.deepEqual(normalized, { widths: [48, 800], dark: ["2:1"], bold: [], align: {}, tableAlign: "left", headerRow: true, headerColumn: false });
   const keys = [markdownTableCellKey(1, 0), markdownTableCellKey(1, 1)];
   const enabled = setMarkdownTableCells(normalized, keys, "bold", true);
   assert.deepEqual(enabled.bold, ["1:0", "1:1"]);

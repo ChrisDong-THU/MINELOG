@@ -26,7 +26,7 @@ export const EMPTY_MARKDOWN_TABLE_STYLE: MarkdownTableStyle = {
   bold: [],
   align: {},
   tableAlign: "left",
-  headerRow: false,
+  headerRow: true,
   headerColumn: false,
 };
 
@@ -70,7 +70,7 @@ export function normalizeMarkdownTableStyle(value: unknown): MarkdownTableStyle 
     bold: uniqueCellKeys(source.bold),
     align,
     tableAlign: source.tableAlign === "center" || source.tableAlign === "right" ? source.tableAlign : "left",
-    headerRow: source.headerRow === true,
+    headerRow: source.headerRow !== false,
     headerColumn: source.headerColumn === true,
   };
 }
@@ -105,7 +105,7 @@ function styleIsEmpty(style: MarkdownTableStyle) {
     && style.bold.length === 0
     && Object.keys(style.align).length === 0
     && style.tableAlign === "left"
-    && !style.headerRow
+    && style.headerRow
     && !style.headerColumn;
 }
 

@@ -197,8 +197,10 @@ test("keeps navigation, rendering and local content storage in focused modules",
   assert.match(readerStyles, /\.markdown-body :not\(\.katex-display\) > \.katex \{[^}]*overflow-wrap: normal;[^}]*word-break: normal;[^}]*white-space: nowrap;/s);
   assert.match(readerStyles, /\.markdown-body \.katex-display \{[^}]*overflow-x: auto;[^}]*overflow-y: hidden;/s);
   assert.match(readerStyles, /\.markdown-body \.katex-display > \.katex \{[^}]*width: max-content;[^}]*min-width: 100%;[^}]*max-width: none;/s);
-  assert.match(readerStyles, /\.markdown-body blockquote \{[^}]*border: 0;[^}]*linear-gradient[^}]*font-style: italic;/s);
+  assert.match(readerStyles, /\.markdown-body blockquote \{[^}]*border: 0;[^}]*linear-gradient/s);
+  assert.doesNotMatch(readerStyles, /\.markdown-body blockquote \{[^}]*font-style:/s);
   assert.match(readerStyles, /\.markdown-body blockquote::before \{[^}]*content: "\\201C";/s);
+  assert.doesNotMatch(readerStyles, /\.markdown-body blockquote::after/);
   assert.match(readerStyles, /\.markdown-body h1 \{[^}]*margin: 20px 0 8px;[^}]*font-size: 27px;/s);
   assert.doesNotMatch(readerStyles, /\.markdown-body h1::after/);
   assert.match(readerStyles, /\.markdown-body h2::before \{[^}]*width: 3px;[^}]*box-shadow:/s);

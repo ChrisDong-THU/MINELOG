@@ -188,7 +188,6 @@
   background: linear-gradient(90deg, rgba(126, 151, 88, .12), rgba(126, 151, 88, .025) 72%, transparent);
   color: #4b5148;
   font-size: 14.5px;
-  font-style: italic;
   line-height: 1.85;
 }
 .markdown-body blockquote::before {
@@ -198,15 +197,6 @@
   color: rgba(103, 127, 70, .62);
   content: "\201C";
   font: 48px/1 Georgia, "Times New Roman", serif;
-}
-.markdown-body blockquote::after {
-  position: absolute;
-  top: .45em;
-  bottom: .45em;
-  left: 1.48em;
-  width: 1px;
-  background: linear-gradient(transparent, rgba(112, 137, 76, .48) 18%, rgba(112, 137, 76, .48) 82%, transparent);
-  content: "";
 }
 .markdown-body blockquote > :first-child { margin-top: 0; }
 .markdown-body blockquote > :last-child { margin-bottom: 0; }
@@ -472,7 +462,6 @@
   .markdown-body h2 { font-size: 20px; }
   .markdown-body h3 { font-size: 17px; }
   .markdown-body blockquote { margin-right: 0; margin-left: 0; padding-right: .8em; padding-left: 2em; }
-  .markdown-body blockquote::after { left: 1.3em; }
   .markdown-code-block { margin-right: -8px; margin-left: -8px; }
   .markdown-body pre { padding: 15px 14px 14px; }
 }

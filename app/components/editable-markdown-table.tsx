@@ -28,6 +28,10 @@ type Axis = "row" | "column";
 type MenuState = { kind: Axis | "cell" | "table"; index: number; anchor: { left: number; top: number } };
 type Metric = { start: number; size: number };
 
+const TABLE_MENU_WIDTH = 220;
+const TABLE_MENU_GAP = 8;
+const TABLE_MENU_VIEWPORT_GUTTER = 12;
+
 function selectionRange(selection: CellSelection) {
   return {
     top: Math.min(selection.anchor.row, selection.focus.row),
@@ -99,6 +103,7 @@ export function EditableMarkdownTable({
   onStructureChange?: (action: MarkdownTableAction) => void;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
   const dirtyCells = useRef(new Set<string>());
@@ -193,13 +198,21 @@ export function EditableMarkdownTable({
 
   const openMenu = (next: Omit<MenuState, "anchor">, event: MouseEvent<HTMLButtonElement>) => {
     const rootRect = rootRef.current?.getBoundingClientRect();
+    if (!rootRect) return;
     const anchorRect = event.currentTarget.getBoundingClientRect();
+    const leftBoundary = Math.max(TABLE_MENU_VIEWPORT_GUTTER, rootRect.left);
+    const rightBoundary = Math.min(document.documentElement.clientWidth - TABLE_MENU_VIEWPORT_GUTTER, rootRect.right);
+    const maximumLeft = Math.max(leftBoundary, rightBoundary - TABLE_MENU_WIDTH);
+    const rightCandidate = anchorRect.right + TABLE_MENU_GAP;
+    const leftCandidate = anchorRect.left - TABLE_MENU_GAP - TABLE_MENU_WIDTH;
+    const preferredLeft = rightCandidate + TABLE_MENU_WIDTH <= rightBoundary ? rightCandidate : leftCandidate;
+    const viewportLeft = Math.max(leftBoundary, Math.min(maximumLeft, preferredLeft));
     if (next.kind !== "cell") setSelection(null);
     setMenu({
       ...next,
       anchor: {
-        left: anchorRect.right - (rootRect?.left ?? 0),
-        top: anchorRect.bottom - (rootRect?.top ?? 0),
+        left: viewportLeft - rootRect.left,
+        top: anchorRect.bottom - rootRect.top + TABLE_MENU_GAP,
       },
     });
   };
@@ -222,7 +235,8 @@ export function EditableMarkdownTable({
 
   const startCellSelection = (event: PointerEvent<HTMLDivElement>) => {
     const table = tableRef.current;
-    if (!editable || !table || event.button !== 0 || event.target instanceof Element && event.target.closest("button")) return;
+    const scroller = scrollRef.current;
+    if (!editable || !table || !scroller || event.button !== 0 || event.target instanceof Element && event.target.closest("button")) return;
     const anchor = positionForCell(table, event.target);
     if (!anchor) return;
 
@@ -233,8 +247,42 @@ export function EditableMarkdownTable({
 
     const startX = event.clientX;
     const startY = event.clientY;
+    let pointerX = startX;
+    let pointerY = startY;
     let selecting = false;
+    let scrollFrame = 0;
+    const updateFocus = () => {
+      const viewport = scroller.getBoundingClientRect();
+      if (pointerY < viewport.top || pointerY > viewport.bottom) return;
+      const hitX = Math.max(viewport.left + 1, Math.min(viewport.right - 1, pointerX));
+      const focus = positionForCell(table, document.elementFromPoint(hitX, pointerY));
+      if (focus) setSelection((current) => current && sameCellPosition(current.anchor, anchor) && sameCellPosition(current.focus, focus)
+        ? current
+        : { anchor, focus });
+    };
+    const autoScroll = () => {
+      scrollFrame = 0;
+      if (!selecting) return;
+      const viewport = scroller.getBoundingClientRect();
+      const edge = Math.min(48, viewport.width / 4);
+      let speed = 0;
+      if (pointerX < viewport.left + edge) {
+        speed = -Math.max(4, Math.min(20, Math.round((viewport.left + edge - pointerX) / edge * 20)));
+      } else if (pointerX > viewport.right - edge) {
+        speed = Math.max(4, Math.min(20, Math.round((pointerX - viewport.right + edge) / edge * 20)));
+      }
+      if (!speed) return;
+      const previous = scroller.scrollLeft;
+      scroller.scrollLeft += speed;
+      if (scroller.scrollLeft === previous) return;
+      updateFocus();
+      scrollFrame = requestAnimationFrame(autoScroll);
+    };
+    const scheduleAutoScroll = () => {
+      if (!scrollFrame) scrollFrame = requestAnimationFrame(autoScroll);
+    };
     const finish = () => {
+      if (scrollFrame) cancelAnimationFrame(scrollFrame);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", finish);
       window.removeEventListener("pointercancel", finish);
@@ -242,6 +290,8 @@ export function EditableMarkdownTable({
       selectionCleanup.current = null;
     };
     const move = (moveEvent: globalThis.PointerEvent) => {
+      pointerX = moveEvent.clientX;
+      pointerY = moveEvent.clientY;
       if (!selecting && Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 4) return;
       if (!selecting) {
         selecting = true;
@@ -249,10 +299,8 @@ export function EditableMarkdownTable({
       }
       moveEvent.preventDefault();
       window.getSelection()?.removeAllRanges();
-      const focus = positionForCell(table, document.elementFromPoint(moveEvent.clientX, moveEvent.clientY));
-      if (focus) setSelection((current) => current && sameCellPosition(current.anchor, anchor) && sameCellPosition(current.focus, focus)
-        ? current
-        : { anchor, focus });
+      updateFocus();
+      scheduleAutoScroll();
     };
     selectionCleanup.current = finish;
     window.addEventListener("pointermove", move, { passive: false });
@@ -396,7 +444,7 @@ export function EditableMarkdownTable({
     : undefined;
 
   return <div ref={rootRef} className={`markdown-table${editable ? " is-editable" : ""}${selection ? " has-cell-selection" : ""}`}>
-    <div className="table-scroll">
+    <div ref={scrollRef} className="table-scroll">
       <div ref={stageRef} className="markdown-table-stage" onPointerDown={startCellSelection} onPointerMove={(event) => {
         if (tableRef.current) {
           const position = positionForCell(tableRef.current, event.target);
