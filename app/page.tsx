@@ -23,11 +23,11 @@ import { SectionPage } from "./components/section-page";
 import { SearchPage } from "./components/search-page";
 import {
   articleMarkdownKey,
-  contentFromLocalFiles,
   contentToLocalFiles,
   createSearchDocuments,
   EMPTY_CONTENT_STATE,
   markdownForArticle,
+  mergeContentFromLocalFiles,
   parseLegacyContent,
 } from "./content-model";
 import { assignSectionToHotbarSlot, resolveHotbarSections } from "./hotbar-model";
@@ -49,6 +49,14 @@ function createSectionId() {
 }
 function Item({ src, alt = "" }: { src: string; alt?: string }) {
   return <img className="pixel-item" src={src} alt={alt} draggable={false} />;
+}
+
+function ContentLoadingState({ children }: { children: string }) {
+  return <div className="content-loading-state" role="status">
+    <span className="content-loading-label" aria-label={children}>
+      {Array.from(children).map((character, index) => <span aria-hidden="true" style={{ animationDelay: `${index * 70}ms` }} key={`${character}-${index}`}>{character}</span>)}
+    </span>
+  </div>;
 }
 
 type NavigationLock = { current: boolean };
@@ -226,7 +234,7 @@ export default function Home() {
         if (!result.initialized) {
           if (!editorAuthorizedRef.current) {
             if (!disposed) {
-              setContent(contentFromLocalFiles(result.articles));
+              setContent((current) => mergeContentFromLocalFiles(current, result.articles));
               setContentReady(true);
             }
             return;
@@ -241,7 +249,7 @@ export default function Home() {
           result = await initializeLocalArticleFiles(contentToLocalFiles(initialContent));
         }
         if (disposed) return;
-        setContent(contentFromLocalFiles(result.articles));
+        setContent((current) => mergeContentFromLocalFiles(current, result.articles));
         setContentReady(true);
         try {
           window.localStorage.removeItem(CONTENT_KEY);
@@ -432,9 +440,9 @@ export default function Home() {
         }));
       })
       .catch(() => {
-        markdownRequests.current.delete(key);
         setNotice("文章正文载入失败，请稍后重试");
-      });
+      })
+      .finally(() => markdownRequests.current.delete(key));
   }, [editing, editingArticle, reading, readingArticle, hasMarkdown]);
 
 
@@ -690,7 +698,7 @@ export default function Home() {
     const today = new Date();
     const date = `${String(today.getMonth() + 1).padStart(2, "0")}.${String(today.getDate()).padStart(2, "0")}`;
     const updatedAt = new Date().toISOString();
-    const nextArticle: SectionArticle = {
+    const pendingArticle: SectionArticle = {
       id: value.id,
       title: value.title,
       author: value.author,
@@ -701,16 +709,32 @@ export default function Home() {
       updatedAt,
     };
 
+    let saved;
     try {
-      await saveLocalArticleFile({
-        ...nextArticle,
+      const previous = editing.mode === "edit" && editingArticle?.updatedAt
+        ? { markdown: articleMarkdown(editingArticle), updatedAt: editingArticle.updatedAt }
+        : undefined;
+      saved = await saveLocalArticleFile({
+        ...pendingArticle,
         sectionId: value.sectionId,
         markdown: value.markdown,
-      }, value.uploadedAssetUrls ?? []);
+      }, value.uploadedAssetUrls ?? [], previous);
     } catch (error) {
       ping(error instanceof Error ? error.message : "\u4FDD\u5B58 Markdown \u6587\u4EF6\u5931\u8D25");
       return;
     }
+
+    const nextArticle: SectionArticle = {
+      id: saved.id,
+      title: saved.title,
+      author: saved.author,
+      summary: saved.summary,
+      tags: saved.tags,
+      date: saved.date,
+      read: saved.read,
+      updatedAt: saved.updatedAt,
+    };
+    const savedMarkdown = saved.markdown ?? value.markdown;
 
     setContent((current) => {
       const articles = Object.fromEntries(Object.entries(current.articles).map(([id, entries]) => [id, [...entries]])) as Record<string, SectionArticle[]>;
@@ -720,7 +744,7 @@ export default function Home() {
       articles[value.sectionId] = [nextArticle, ...(articles[value.sectionId] ?? [])];
       return {
         articles,
-        markdown: { ...current.markdown, [articleMarkdownKey(value.id)]: value.markdown },
+        markdown: { ...current.markdown, [articleMarkdownKey(value.id)]: savedMarkdown },
       };
     });
     setActive(value.sectionId);
@@ -788,8 +812,8 @@ export default function Home() {
     </header>
 
     <section className={`content-viewport${immersive ? " is-reading" : ""}`} aria-live="polite">
-      <Suspense fallback={<div className="content-loading-state" role="status">正在载入页面…</div>}>
-      {editing ? (editorInitialValue ? <ArticleEditor mode={editing.mode} sections={sections} initialValue={editorInitialValue} onCancel={closeEditor} onSave={saveArticle} onDelete={editing.mode === "edit" ? deleteArticle : undefined} onDirtyChange={handleEditorDirtyChange} /> : <div className="content-loading-state" role="status">正在载入文章正文…</div>) : readingSection && readingArticle ? (readingMarkdownReady ? <ArticleReader section={readingSection} article={readingArticle} markdown={articleMarkdown(readingArticle)} onBack={closeReader} /> : <div className="content-loading-state" role="status">正在载入文章正文…</div>) : <>
+      <Suspense fallback={<ContentLoadingState>正在载入页面…</ContentLoadingState>}>
+      {editing ? (editorInitialValue ? <ArticleEditor mode={editing.mode} sections={sections} initialValue={editorInitialValue} onCancel={closeEditor} onSave={saveArticle} onDelete={editing.mode === "edit" ? deleteArticle : undefined} onDirtyChange={handleEditorDirtyChange} /> : <ContentLoadingState>正在载入文章正文…</ContentLoadingState>) : readingSection && readingArticle ? (readingMarkdownReady ? <ArticleReader section={readingSection} article={readingArticle} markdown={articleMarkdown(readingArticle)} onBack={closeReader} /> : <ContentLoadingState>正在载入文章正文…</ContentLoadingState>) : <>
       {active === "home" && <div className="home-content" />}
 
       {active === "search" && <SearchPage

@@ -75,6 +75,16 @@ export function contentFromLocalFiles(files: LocalArticleFile[]): ContentState {
   return { articles, markdown };
 }
 
+export function mergeContentFromLocalFiles(current: ContentState, files: LocalArticleFile[]): ContentState {
+  const refreshed = contentFromLocalFiles(files);
+  const articleIds = new Set(files.map((file) => articleMarkdownKey(file.id)));
+  const retainedMarkdown = Object.fromEntries(Object.entries(current.markdown).filter(([key]) => articleIds.has(key)));
+  return {
+    articles: refreshed.articles,
+    markdown: { ...retainedMarkdown, ...refreshed.markdown },
+  };
+}
+
 export function createSearchDocuments(
   sections: Section[],
   articles: ContentState["articles"],

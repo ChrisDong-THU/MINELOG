@@ -7,8 +7,12 @@ import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { rehypeKatexSizingCompat } from "../katex-compat";
+import { EMPTY_MARKDOWN_TABLE_STYLE, readMarkdownTableStyle, type MarkdownTableStyle } from "../markdown-table-style";
+import { markdownTableCells, type MarkdownTableAction } from "../markdown-table-model";
 import { markdownCodeLineRange, type MarkdownSourceRange } from "../markdown-source-range";
+import { remarkMinelogTableMetadata } from "../remark-minelog-table-metadata";
 import { remarkTyporaMath } from "../remark-typora-math";
+import { EditableMarkdownTable } from "./editable-markdown-table";
 import { ResizableMarkdownImage } from "./resizable-markdown-image";
 
 type MarkdownComponents = ComponentProps<typeof ReactMarkdown>["components"];
@@ -36,7 +40,7 @@ function rehypeSourcePositions() {
   };
 }
 
-const REMARK_PLUGINS: NonNullable<ComponentProps<typeof ReactMarkdown>["remarkPlugins"]> = [remarkGfm, remarkMath, remarkTyporaMath];
+const REMARK_PLUGINS: NonNullable<ComponentProps<typeof ReactMarkdown>["remarkPlugins"]> = [remarkGfm, remarkMath, remarkTyporaMath, remarkMinelogTableMetadata];
 const BASE_REHYPE_PLUGINS: NonNullable<ComponentProps<typeof ReactMarkdown>["rehypePlugins"]> = [
   [rehypeHighlight, {
     aliases: {
@@ -174,14 +178,20 @@ export function MarkdownRenderer({
   components,
   className = "",
   editableImages = false,
+  editableTables = false,
   onImageWidthChange,
+  onTableStyleChange,
+  onTableStructureChange,
   onSourceActivate,
 }: {
   markdown: string;
   components?: MarkdownComponents;
   className?: string;
   editableImages?: boolean;
+  editableTables?: boolean;
   onImageWidthChange?: (src: string, width: number) => void;
+  onTableStyleChange?: (tableEnd: number, style: MarkdownTableStyle) => void;
+  onTableStructureChange?: (tableStart: number, tableEnd: number, action: MarkdownTableAction, style: MarkdownTableStyle) => void;
   onSourceActivate?: (range: MarkdownSourceRange) => void;
 }) {
   const rootRef = useRef<HTMLElement>(null);
@@ -210,14 +220,33 @@ export function MarkdownRenderer({
         {...props}
       />;
     },
-    table: ({ children }) => <div className="table-scroll"><table>{children}</table></div>,
+    table: ({ children, node, ...props }) => {
+      const tableStart = node?.position?.start.offset;
+      const tableEnd = node?.position?.end.offset;
+      const tableSource = typeof tableStart === "number" && typeof tableEnd === "number" ? markdown.slice(tableStart, tableEnd) : "";
+      const presentation: MarkdownTableStyle = typeof tableEnd === "number"
+        ? readMarkdownTableStyle(markdown, tableEnd).style
+        : EMPTY_MARKDOWN_TABLE_STYLE;
+      return <EditableMarkdownTable
+        {...props}
+        presentation={presentation}
+        editable={editableTables}
+        cellSources={markdownTableCells(tableSource)}
+        onPresentationChange={typeof tableEnd === "number" && onTableStyleChange
+          ? (style) => onTableStyleChange(tableEnd, style)
+          : undefined}
+        onStructureChange={typeof tableStart === "number" && typeof tableEnd === "number" && onTableStructureChange
+          ? (action) => onTableStructureChange(tableStart, tableEnd, action, presentation)
+          : undefined}
+      >{children}</EditableMarkdownTable>;
+    },
     pre: ({ children, node, ...props }) => {
       void node;
       const { language, label } = codeBlockLanguage(children);
       return <MarkdownCodeBlock language={language} label={label} {...props}>{children}</MarkdownCodeBlock>;
     },
     ...components,
-  }), [components, editableImages, onImageWidthChange]);
+  }), [components, editableImages, editableTables, markdown, onImageWidthChange, onTableStructureChange, onTableStyleChange]);
 
   const handleDoubleClick = (event: MouseEvent<HTMLElement>) => {
     if (!onSourceActivate || !(event.target instanceof Element)) return;

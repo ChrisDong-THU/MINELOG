@@ -5,8 +5,10 @@ import { handleR2ContentRequest } from "../worker/r2-content.ts";
 
 class MemoryBucket {
   objects = new Map();
+  putCalls = [];
 
   async put(key, value, options = {}) {
+    this.putCalls.push(key);
     let bytes;
     if (typeof value === "string") bytes = new TextEncoder().encode(value);
     else if (value instanceof ArrayBuffer) bytes = new Uint8Array(value);
@@ -48,6 +50,75 @@ class MemoryBucket {
     for (const key of Array.isArray(keys) ? keys : [keys]) this.objects.delete(key);
   }
 }
+
+test("R2 applies versioned Markdown patches, rejects stale edits, and skips unchanged writes", async () => {
+  const bucket = new MemoryBucket();
+  const id = "33333333-3333-4333-8333-333333333333";
+  const before = `${"a".repeat(1200)}old${"z".repeat(1200)}`;
+  const after = `${"a".repeat(1200)}new${"z".repeat(1200)}`;
+  const baseArticle = {
+    id,
+    sectionId: "notes",
+    title: "Incremental",
+    author: "Ada",
+    summary: "",
+    date: "09.01",
+    read: "5 MIN",
+    tags: ["delta"],
+    markdown: before,
+    updatedAt: "2026-09-01T01:00:00.000Z",
+  };
+  const created = await handleR2ContentRequest(new Request("https://minelog.example/api/local-articles", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ article: baseArticle }),
+  }), bucket);
+  assert.equal(created?.status, 200);
+
+  const metadata = { ...baseArticle };
+  delete metadata.markdown;
+  const updated = await handleR2ContentRequest(new Request("https://minelog.example/api/local-articles", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      article: { ...metadata, updatedAt: "2026-09-01T02:00:00.000Z" },
+      baseUpdatedAt: baseArticle.updatedAt,
+      markdownPatch: { start: 1200, deleteCount: 3, insert: "new", baseUpdatedAt: baseArticle.updatedAt },
+    }),
+  }), bucket);
+  assert.equal(updated?.status, 200);
+  assert.equal((await updated.json()).article.markdown, after);
+
+  const stale = await handleR2ContentRequest(new Request("https://minelog.example/api/local-articles", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      article: { ...metadata, updatedAt: "2026-09-01T03:00:00.000Z" },
+      markdownPatch: { start: 1200, deleteCount: 3, insert: "bad", baseUpdatedAt: baseArticle.updatedAt },
+    }),
+  }), bucket);
+  assert.equal(stale?.status, 409);
+
+  const missingBody = await handleR2ContentRequest(new Request("https://minelog.example/api/local-articles", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ article: metadata }),
+  }), bucket);
+  assert.equal(missingBody?.status, 400);
+
+  const writesBeforeNoop = bucket.putCalls.length;
+  const unchanged = await handleR2ContentRequest(new Request("https://minelog.example/api/local-articles", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      article: { ...baseArticle, markdown: after, updatedAt: "2026-09-01T04:00:00.000Z" },
+      baseUpdatedAt: "2026-09-01T02:00:00.000Z",
+    }),
+  }), bucket);
+  assert.equal(unchanged?.status, 200);
+  assert.equal((await unchanged.json()).unchanged, true);
+  assert.equal(bucket.putCalls.length, writesBeforeNoop);
+});
 
 test("R2 accepts and safely serves SVG article images", async () => {
   const bucket = new MemoryBucket();

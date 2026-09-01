@@ -9,6 +9,7 @@ import {
 } from "../shared/image-assets.ts";
 import { handleVisitorLocationRequest } from "./visitor-locations.ts";
 import { articleAuthor } from "../shared/article-metadata.ts";
+import { applyTextPatch, normalizeVersionedTextPatch } from "../shared/text-patch.ts";
 const ARTICLE_API = "/api/local-articles";
 const ARTICLE_VIEWS_API = "/api/article-views";
 const ASSET_API = "/api/local-assets";
@@ -54,6 +55,8 @@ type Article = {
 
 type ArticleIndexRecord = Omit<Article, "markdown"> & { objectKey: string; assetKeys?: string[] };
 type Section = { id: string; label: string; icon: string; enabled: boolean; hotbarSlot?: number; description: string };
+
+class ArticleVersionConflictError extends Error {}
 
 function json(status: number, value: unknown, headers?: HeadersInit) {
   return Response.json(value, { status, headers: { "cache-control": "no-store", ...headers } });
@@ -200,6 +203,16 @@ function indexRecord(article: Article, objectKey: string): ArticleIndexRecord {
   return { ...metadata, objectKey, assetKeys: imageAssetKeysFromMarkdown(markdown) };
 }
 
+function sameArticleContent(left: Article, right: Article) {
+  return left.sectionId === right.sectionId
+    && left.title === right.title
+    && left.author === right.author
+    && left.summary === right.summary
+    && left.markdown === right.markdown
+    && left.tags.length === right.tags.length
+    && left.tags.every((tag, index) => tag === right.tags[index]);
+}
+
 function normalizeCleanupAssetKeys(value: unknown) {
   if (value === undefined) return [] as string[];
   if (!Array.isArray(value) || value.length > 500) throw new Error("待清理图片列表不合法");
@@ -275,13 +288,39 @@ async function handleArticles(request: Request, bucket: R2BucketLike, url: URL) 
   }
 
   if (request.method === "PUT") {
-    const payload = await requestJson(request, MAX_ARTICLE_REQUEST_BYTES) as { article?: unknown; cleanupAssetUrls?: unknown };
-    const article = normalizeArticle(payload.article);
+    const payload = await requestJson(request, MAX_ARTICLE_REQUEST_BYTES) as {
+      article?: unknown;
+      cleanupAssetUrls?: unknown;
+      baseUpdatedAt?: unknown;
+      markdownPatch?: unknown;
+    };
+    if (!payload.article || typeof payload.article !== "object") throw new Error("文章数据格式不正确");
+    const source = payload.article as Record<string, unknown>;
+    const articleId = safeArticleId(source.id);
+    const patch = payload.markdownPatch === undefined ? undefined : normalizeVersionedTextPatch(payload.markdownPatch);
+    if (!patch && typeof source.markdown !== "string") throw new Error("文章正文格式不正确");
     const uploadedAssetKeys = normalizeCleanupAssetKeys(payload.cleanupAssetUrls);
     const records = await hydrateArticleAssetKeys(bucket, await readArticleIndex(bucket));
-    const previous = records.find((item) => item.id === article.id);
+    const previous = records.find((item) => item.id === articleId);
+    const previousObject = previous ? await bucket.get(previous.objectKey) : null;
+    if (previous && !previousObject) throw new Error("文章正文不存在");
+    const previousArticle = previousObject ? normalizeArticle(JSON.parse(await previousObject.text())) : undefined;
+    const baseUpdatedAt = patch?.baseUpdatedAt ?? payload.baseUpdatedAt;
+    if (baseUpdatedAt !== undefined) {
+      if (typeof baseUpdatedAt !== "string" || !previousArticle || previousArticle.updatedAt !== baseUpdatedAt) {
+        throw new ArticleVersionConflictError("文章已在其他位置更新，请重新载入后再保存");
+      }
+    }
+    if (patch && !previousArticle) throw new ArticleVersionConflictError("文章基准版本不存在，请重新载入后再保存");
+    const markdown = patch ? applyTextPatch(previousArticle!.markdown, patch) : source.markdown;
+    const article = normalizeArticle({ ...source, markdown });
     const duplicate = records.find((item) => item.sectionId === article.sectionId && item.title === article.title && item.id !== article.id);
     if (duplicate) return json(409, { error: "同一板块中已存在同名文章" });
+    if (previous && previousArticle && sameArticleContent(previousArticle, article)) {
+      const currentAssets = new Set(previous.assetKeys ?? []);
+      await deleteUnreferencedR2Assets(bucket, uploadedAssetKeys.filter((key) => !currentAssets.has(key)), records);
+      return json(200, { article: previousArticle, unchanged: true });
+    }
     const objectKey = await putArticle(bucket, article);
     const current = indexRecord(article, objectKey);
     const currentAssets = new Set(current.assetKeys ?? []);
@@ -424,6 +463,6 @@ export async function handleR2ContentRequest(request: Request, bucket: R2BucketL
     if (url.pathname === ASSET_API || url.pathname.startsWith(`${ASSET_API}/`)) return await handleAssets(request, bucket, url);
     return null;
   } catch (error) {
-    return json(400, { error: error instanceof Error ? error.message : "线上存储操作失败" });
+    return json(error instanceof ArticleVersionConflictError ? 409 : 400, { error: error instanceof Error ? error.message : "线上存储操作失败" });
   }
 }

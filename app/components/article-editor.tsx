@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type Keyboar
 import { articleAuthor } from "../../shared/article-metadata";
 import { resolveArticleSubtitle } from "../article-subtitle";
 import type { Section } from "../content-types";
+import { readMarkdownTableStyle, writeMarkdownTableStyle, type MarkdownTableStyle } from "../markdown-table-style";
+import { transformMarkdownTable, type MarkdownTableAction } from "../markdown-table-model";
 import { MINECRAFT_UI_ICONS } from "../minecraft-icons";
 import { saveLocalArticleImage } from "../local-article-assets";
 import { GameModal } from "./game-modal";
@@ -203,11 +205,12 @@ export function ArticleEditor({
     next: string,
     selection: EditorSelection,
     kind: "typing" | "command" = "command",
+    focusAfterCommand = true,
   ) => {
     const current = markdownRef.current;
     if (next === current) {
       selectionRef.current = selection;
-      focusSelection(selection);
+      if (focusAfterCommand) focusSelection(selection);
       return;
     }
 
@@ -225,7 +228,7 @@ export function ArticleEditor({
     selectionRef.current = selection;
     markdownRef.current = next;
     setMarkdown(next);
-    if (kind === "command") focusSelection(selection);
+    if (kind === "command" && focusAfterCommand) focusSelection(selection);
   };
 
   const replaceRange = (
@@ -436,6 +439,45 @@ export function ArticleEditor({
     const next = current.replace(imagePattern, (_match, opening: string, closing: string) => `${opening}${nextSource}${closing}`);
     if (next === current) return;
     updateMarkdown(next, currentSelection());
+  };
+
+  const updateTableStyle = (tableEnd: number, style: MarkdownTableStyle) => {
+    const current = markdownRef.current;
+    const edit = writeMarkdownTableStyle(current, tableEnd, style);
+    if (edit.markdown === current) return;
+    const selection = currentSelection();
+    const delta = edit.nextEnd - edit.previousEnd;
+    const shift = (offset: number) => {
+      if (offset <= edit.start) return offset;
+      if (offset >= edit.previousEnd) return offset + delta;
+      return edit.nextEnd;
+    };
+    updateMarkdown(edit.markdown, { start: shift(selection.start), end: shift(selection.end) }, "command", false);
+  };
+
+  const updateTableStructure = (tableStart: number, tableEnd: number, action: MarkdownTableAction, style: MarkdownTableStyle) => {
+    const current = markdownRef.current;
+    const currentMetadata = readMarkdownTableStyle(current, tableEnd).metadata;
+    const oldRegionEnd = currentMetadata?.end ?? tableEnd;
+    let transformed;
+    try {
+      transformed = transformMarkdownTable(current.slice(tableStart, tableEnd), style, action);
+    } catch {
+      return;
+    }
+    const withTable = current.slice(0, tableStart) + transformed.source + current.slice(tableEnd);
+    const nextTableEnd = tableStart + transformed.source.length;
+    const edit = writeMarkdownTableStyle(withTable, nextTableEnd, transformed.style);
+    const nextMetadata = readMarkdownTableStyle(edit.markdown, nextTableEnd).metadata;
+    const newRegionEnd = nextMetadata?.end ?? nextTableEnd;
+    const delta = newRegionEnd - oldRegionEnd;
+    const selection = currentSelection();
+    const shift = (offset: number) => {
+      if (offset <= tableStart) return offset;
+      if (offset >= oldRegionEnd) return offset + delta;
+      return newRegionEnd;
+    };
+    updateMarkdown(edit.markdown, { start: shift(selection.start), end: shift(selection.end) }, "command", false);
   };
 
   const submit = async () => {
@@ -674,7 +716,10 @@ export function ArticleEditor({
         <MarkdownRenderer
           markdown={markdown}
           editableImages
+          editableTables
           onImageWidthChange={updateImageWidth}
+          onTableStyleChange={updateTableStyle}
+          onTableStructureChange={updateTableStructure}
           onSourceActivate={focusMarkdownSource}
         />
       </section>

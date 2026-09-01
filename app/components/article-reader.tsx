@@ -2,7 +2,7 @@
 
 import { Children, isValidElement, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { resolveArticleSubtitle } from "../article-subtitle";
-import { recordArticleView } from "../article-views";
+import { formatArticleViews, recordArticleView } from "../article-views";
 import type { Section, SectionArticle } from "../content-types";
 import { MINECRAFT_UI_ICONS } from "../minecraft-icons";
 import { MarkdownRenderer } from "./markdown-renderer";
@@ -147,8 +147,8 @@ export function ArticleReader({ section, article, markdown, onBack }: { section:
           </div>
           <dl className="reader-details">
             <div className="reader-detail-author"><dt>by</dt><dd title={article.author}>{article.author}</dd></div>
-            <div><dt>更新</dt><dd>2026.{article.date}</dd></div>
-            <div><dt>浏览</dt><dd>{views === null ? "—" : views.toLocaleString("zh-CN")}</dd></div>
+            <div className="reader-detail-updated"><dt>更新</dt><dd>2026.{article.date}</dd></div>
+            <div><dt>浏览</dt><dd>{views === null ? "—" : formatArticleViews(views)}</dd></div>
           </dl>
           {article.tags.length > 0 && <div className="reader-tags" aria-label="文章标签">{article.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
 

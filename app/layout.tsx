@@ -6,6 +6,7 @@ import "./reader.css";
 import "./editor.css";
 import "./editor-dialogs.css";
 import "./editor-image-resize.css";
+import "./editor-table-style.css";
 import "./hotbar-drag.css";
 import "./home-globe.css";
 

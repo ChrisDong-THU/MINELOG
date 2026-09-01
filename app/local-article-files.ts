@@ -1,4 +1,5 @@
 import type { SectionArticle } from "./content-types";
+import { createTextPatch, textPatchSavesBytes, type VersionedTextPatch } from "../shared/text-patch.ts";
 
 const ENDPOINT = "/api/local-articles";
 
@@ -11,6 +12,14 @@ type ListResponse = {
   available: boolean;
   initialized: boolean;
   articles: LocalArticleFile[];
+};
+
+type ArticleSaveBase = Pick<LocalArticleFile, "markdown" | "updatedAt">;
+type ArticleSavePayload = {
+  article: Omit<LocalArticleFile, "markdown"> & { markdown?: string };
+  cleanupAssetUrls: string[];
+  baseUpdatedAt?: string;
+  markdownPatch?: VersionedTextPatch;
 };
 
 async function responseJson<T>(response: Response): Promise<T> {
@@ -41,13 +50,31 @@ export async function initializeLocalArticleFiles(articles: LocalArticleFile[]):
   return responseJson<ListResponse>(response);
 }
 
-export async function saveLocalArticleFile(article: LocalArticleFile, cleanupAssetUrls: string[] = []) {
+export function buildArticleSavePayload(article: LocalArticleFile, cleanupAssetUrls: string[] = [], previous?: ArticleSaveBase): ArticleSavePayload {
+  if (previous?.updatedAt) {
+    const markdown = article.markdown ?? "";
+    const patch = createTextPatch(previous.markdown ?? "", markdown);
+    if (textPatchSavesBytes(patch, markdown)) {
+      const metadata = { ...article };
+      delete metadata.markdown;
+      return {
+        article: metadata,
+        cleanupAssetUrls,
+        baseUpdatedAt: previous.updatedAt,
+        markdownPatch: { ...patch, baseUpdatedAt: previous.updatedAt },
+      };
+    }
+  }
+  return { article, cleanupAssetUrls, ...(previous?.updatedAt ? { baseUpdatedAt: previous.updatedAt } : {}) };
+}
+
+export async function saveLocalArticleFile(article: LocalArticleFile, cleanupAssetUrls: string[] = [], previous?: ArticleSaveBase) {
   const response = await fetch(ENDPOINT, {
     method: "PUT",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ article, cleanupAssetUrls }),
+    body: JSON.stringify(buildArticleSavePayload(article, cleanupAssetUrls, previous)),
   });
-  return responseJson<{ article: LocalArticleFile }>(response);
+  return (await responseJson<{ article: LocalArticleFile }>(response)).article;
 }
 
 export async function deleteLocalArticleFile(sectionId: string, articleId?: string) {

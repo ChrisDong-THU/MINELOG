@@ -6,6 +6,10 @@ function viewCount(value: unknown) {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
+export function formatArticleViews(views: number) {
+  return views > 999 ? "999+" : String(views);
+}
+
 async function requestArticleView(articleId: string) {
   const sessionKey = `${SESSION_KEY_PREFIX}${articleId}`;
   let counted = false;

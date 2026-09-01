@@ -9,6 +9,7 @@ import {
   storedImageAssetFileName,
 } from "../shared/image-assets.ts";
 import { articleAuthor } from "../shared/article-metadata.ts";
+import { applyTextPatch, normalizeVersionedTextPatch } from "../shared/text-patch.ts";
 
 const API_PATH = "/api/local-articles";
 const ARTICLE_VIEWS_PATH = "/api/article-views";
@@ -29,6 +30,8 @@ export type LocalArticleFile = {
 };
 
 type ArticleFileRecord = LocalArticleFile & { filePath: string; updatedAt: string };
+
+class ArticleVersionConflictError extends Error {}
 
 function json(res: ServerResponse, status: number, value: unknown) {
   res.statusCode = status;
@@ -241,13 +244,20 @@ function localRequestSameOrigin(req: IncomingMessage) {
   return origin === `${protocol}://${req.headers.host}`;
 }
 
-async function saveOne(root: string, value: unknown, cleanupAssetUrls: unknown = []) {
+async function saveOne(root: string, value: unknown, cleanupAssetUrls: unknown = [], existingRecords?: ArticleFileRecord[]) {
   const article = normalizeArticle(value);
   const uploadedAssetKeys = normalizeCleanupAssetKeys(cleanupAssetUrls);
-  const existing = await readAll(root);
+  const existing = existingRecords ?? await readAll(root);
   const previousRecord = existing.find((record) => record.id === article.id);
   const duplicate = existing.find((record) => record.sectionId === article.sectionId && record.title === article.title && record.id !== article.id);
   if (duplicate) throw new Error("同一板块中已存在同名文章");
+
+  if (previousRecord && sameArticleContent(previousRecord, article)) {
+    const currentAssets = new Set(recordAssetKeys(previousRecord));
+    await deleteUnreferencedAssets(root, uploadedAssetKeys.filter((key) => !currentAssets.has(key)), existing);
+    const { filePath: _filePath, ...previousArticle } = previousRecord;
+    return previousArticle;
+  }
 
   const destination = filePathFor(root, article);
   await mkdir(dirname(destination), { recursive: true });
@@ -269,6 +279,42 @@ async function saveOne(root: string, value: unknown, cleanupAssetUrls: unknown =
   const uploadedAssets = uploadedAssetKeys.filter((key) => !currentAssets.has(key));
   await deleteUnreferencedAssets(root, [...removedAssets, ...uploadedAssets], nextRecords);
   return article;
+}
+
+function sameArticleContent(left: LocalArticleFile, right: LocalArticleFile) {
+  return left.sectionId === right.sectionId
+    && left.title === right.title
+    && left.author === right.author
+    && left.summary === right.summary
+    && left.markdown === right.markdown
+    && left.tags.length === right.tags.length
+    && left.tags.every((tag, index) => tag === right.tags[index]);
+}
+
+async function resolveArticleSave(root: string, payload: {
+  article?: unknown;
+  cleanupAssetUrls?: unknown;
+  baseUpdatedAt?: unknown;
+  markdownPatch?: unknown;
+}) {
+  if (!payload.article || typeof payload.article !== "object") throw new Error("文章数据格式不正确");
+  const source = payload.article as Record<string, unknown>;
+  const articleId = safeArticleId(source.id);
+  const patch = payload.markdownPatch === undefined ? undefined : normalizeVersionedTextPatch(payload.markdownPatch);
+  if (!patch && typeof source.markdown !== "string") throw new Error("文章正文格式不正确");
+  const records = await readAll(root);
+  const previous = records.find((record) => record.id === articleId);
+  const baseUpdatedAt = patch?.baseUpdatedAt ?? payload.baseUpdatedAt;
+
+  if (baseUpdatedAt !== undefined) {
+    if (typeof baseUpdatedAt !== "string" || !previous || previous.updatedAt !== baseUpdatedAt) {
+      throw new ArticleVersionConflictError("文章已在其他位置更新，请重新载入后再保存");
+    }
+  }
+  if (patch && !previous) throw new ArticleVersionConflictError("文章基准版本不存在，请重新载入后再保存");
+
+  const markdown = patch ? applyTextPatch(previous!.markdown, patch) : source.markdown;
+  return saveOne(root, { ...source, markdown }, payload.cleanupAssetUrls, records);
 }
 
 function normalizeInitialArticles(values: unknown[]) {
@@ -306,6 +352,7 @@ function publicArticles(records: ArticleFileRecord[]) {
 export function localArticleFiles(): Plugin {
   let root = process.cwd();
   let viewWriteQueue: Promise<unknown> = Promise.resolve();
+  let articleWriteQueue: Promise<unknown> = Promise.resolve();
   return {
     name: "minelog-local-article-files",
     apply: "serve",
@@ -359,8 +406,10 @@ export function localArticleFiles(): Plugin {
             return json(res, 200, { available: true, initialized: true, articles: publicArticles(articles) });
           }
           if (req.method === "PUT") {
-            const payload = await bodyJson(req) as { article?: unknown; cleanupAssetUrls?: unknown };
-            const article = await saveOne(root, payload.article, payload.cleanupAssetUrls);
+            const payload = await bodyJson(req) as { article?: unknown; cleanupAssetUrls?: unknown; baseUpdatedAt?: unknown; markdownPatch?: unknown };
+            const update = articleWriteQueue.catch(() => undefined).then(() => resolveArticleSave(root, payload));
+            articleWriteQueue = update;
+            const article = await update;
             return json(res, 200, { article });
           }
           if (req.method === "DELETE") {
@@ -389,7 +438,7 @@ export function localArticleFiles(): Plugin {
           return json(res, 405, { error: "不支持的请求方法" });
         } catch (error) {
           server.config.logger.error(error instanceof Error ? error.message : String(error));
-          return json(res, 400, { error: error instanceof Error ? error.message : "本地文章操作失败" });
+          return json(res, error instanceof ArticleVersionConflictError ? 409 : 400, { error: error instanceof Error ? error.message : "本地文章操作失败" });
         }
       });
     },

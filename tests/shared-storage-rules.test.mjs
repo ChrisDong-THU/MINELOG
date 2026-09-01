@@ -121,6 +121,78 @@ test("local image responses use browser-renderable MIME types", async () => {
   }
 });
 
+test("local storage applies versioned Markdown patches and rejects stale edits", async () => {
+  const projectRoot = await mkdtemp(join(tmpdir(), "minelog-local-patches-"));
+  const plugin = localArticleFiles();
+  plugin.configResolved?.({ root: projectRoot });
+  let middleware;
+  plugin.configureServer?.({
+    middlewares: { use(handler) { middleware = handler; } },
+    config: { logger: { error() {} } },
+  });
+  const server = createServer((request, response) => middleware(request, response, () => {
+    response.statusCode = 404;
+    response.end("Not found");
+  }));
+
+  try {
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    assert.ok(address && typeof address === "object");
+    const origin = `http://127.0.0.1:${address.port}`;
+    const id = "44444444-4444-4444-8444-444444444444";
+    const before = `${"a".repeat(1200)}old${"z".repeat(1200)}`;
+    const metadata = {
+      id,
+      sectionId: "notes",
+      title: "Local incremental",
+      author: "Ada",
+      summary: "",
+      date: "09.01",
+      read: "5 MIN",
+      tags: ["delta"],
+    };
+    const firstVersion = "2026-09-01T01:00:00.000Z";
+    const created = await fetch(`${origin}/api/local-articles`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ article: { ...metadata, markdown: before, updatedAt: firstVersion } }),
+    });
+    assert.equal(created.status, 200);
+
+    const patched = await fetch(`${origin}/api/local-articles`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        article: { ...metadata, updatedAt: "2026-09-01T02:00:00.000Z" },
+        markdownPatch: { start: 1200, deleteCount: 3, insert: "new", baseUpdatedAt: firstVersion },
+      }),
+    });
+    assert.equal(patched.status, 200);
+    assert.equal((await patched.json()).article.markdown, `${"a".repeat(1200)}new${"z".repeat(1200)}`);
+
+    const stale = await fetch(`${origin}/api/local-articles`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        article: { ...metadata, updatedAt: "2026-09-01T03:00:00.000Z" },
+        markdownPatch: { start: 1200, deleteCount: 3, insert: "bad", baseUpdatedAt: firstVersion },
+      }),
+    });
+    assert.equal(stale.status, 409);
+
+    const missingBody = await fetch(`${origin}/api/local-articles`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ article: metadata }),
+    });
+    assert.equal(missingBody.status, 400);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
 test("local storage preserves shared images until the final reference is removed", async () => {
   const projectRoot = await mkdtemp(join(tmpdir(), "minelog-local-references-"));
   const middlewares = [];

@@ -1399,14 +1399,23 @@ html[data-page-direction="backward"]::view-transition-new(page-content) {
 }
 .content-loading-state {
   min-height: min(68vh, 720px);
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
   color: rgba(230, 236, 222, .7);
   font-size: 13px;
   letter-spacing: .12em;
 }
-
+.content-loading-label { display: inline-flex; white-space: pre; }
+.content-loading-label > span { display: inline-block; animation: content-loading-character 1.45s ease-in-out infinite; }
+@keyframes content-loading-character {
+  0%, 70%, 100% { opacity: .42; transform: translateY(0); }
+  35% { opacity: 1; color: #dff7b7; transform: translateY(-2px); }
+}
 @media (prefers-reduced-motion: reduce) {
+  .content-loading-label > span { animation: none; }
   .game-select__popup,
   .game-select__trigger > i { transition: none; }
 }
