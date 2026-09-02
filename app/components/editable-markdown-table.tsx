@@ -159,7 +159,7 @@ export function EditableMarkdownTable({
         cell.classList.toggle("is-table-cell-dark", dark.has(key));
         cell.classList.toggle("is-table-cell-bold", bold.has(key));
         cell.classList.toggle("is-table-header-column", presentation.headerColumn && cell.cellIndex === 0);
-        cell.style.textAlign = presentation.align[key] ?? "";
+        cell.style.textAlign = presentation.align[key] ?? presentation.contentAlign;
         if (editable) {
           cell.setAttribute("contenteditable", "plaintext-only");
           cell.setAttribute("spellcheck", "true");
@@ -313,6 +313,10 @@ export function EditableMarkdownTable({
     if (keys.length) onPresentationChange?.(alignMarkdownTableCells(presentation, keys, value));
   };
 
+  const alignTableContent = (contentAlign: "left" | "center" | "right") => {
+    onPresentationChange?.({ ...presentation, contentAlign, align: {} });
+  };
+
   const toggleStyle = (property: "dark" | "bold") => {
     const keys = selectedKeys();
     if (!keys.length) return;
@@ -437,11 +441,15 @@ export function EditableMarkdownTable({
   } : null;
   const selectionCount = range ? (range.right - range.left + 1) * (range.bottom - range.top + 1) : 0;
   const selectedAlignments = menu?.kind === "cell" || menu?.kind === "column"
-    ? selectedKeys().map((key) => presentation.align[key] ?? "left")
+    ? selectedKeys().map((key) => presentation.align[key] ?? presentation.contentAlign)
     : [];
   const selectionAlignment = selectedAlignments.length > 0 && selectedAlignments.every((value) => value === selectedAlignments[0])
     ? selectedAlignments[0]
     : undefined;
+  const tableContentAlignment = Object.entries(presentation.align).some(([key, alignment]) => {
+    const [row, column] = key.split(":").map(Number);
+    return row < rows.length && column < columns.length && alignment !== presentation.contentAlign;
+  }) ? undefined : presentation.contentAlign;
 
   return <div ref={rootRef} className={`markdown-table${editable ? " is-editable" : ""}${selection ? " has-cell-selection" : ""}`}>
     <div ref={scrollRef} className="table-scroll">
@@ -534,8 +542,10 @@ export function EditableMarkdownTable({
       menu={menu}
       presentation={presentation}
       selectionAlignment={selectionAlignment}
+      tableContentAlignment={tableContentAlignment}
       onRun={run}
       onAlign={align}
+      onAlignTableContent={alignTableContent}
       onToggleStyle={toggleStyle}
       onClearStyle={clearStyle}
       onPresentationChange={(style) => onPresentationChange?.(style)}
@@ -543,12 +553,14 @@ export function EditableMarkdownTable({
   </div>;
 }
 
-function TableMenu({ menu, presentation, selectionAlignment, onRun, onAlign, onToggleStyle, onClearStyle, onPresentationChange }: {
+function TableMenu({ menu, presentation, selectionAlignment, tableContentAlignment, onRun, onAlign, onAlignTableContent, onToggleStyle, onClearStyle, onPresentationChange }: {
   menu: MenuState;
   presentation: MarkdownTableStyle;
   selectionAlignment?: "left" | "center" | "right";
+  tableContentAlignment?: "left" | "center" | "right";
   onRun: (action: MarkdownTableAction) => void;
   onAlign: (value: "left" | "center" | "right") => void;
+  onAlignTableContent: (value: "left" | "center" | "right") => void;
   onToggleStyle: (property: "dark" | "bold") => void;
   onClearStyle: () => void;
   onPresentationChange: (style: MarkdownTableStyle) => void;
@@ -579,10 +591,11 @@ function TableMenu({ menu, presentation, selectionAlignment, onRun, onAlign, onT
     </>}
     {menu.kind === "table" && <>
       <AlignmentButtons
-        label="表格对齐"
+        label="表格位置"
         value={presentation.tableAlign}
         onAlign={(tableAlign) => onPresentationChange({ ...presentation, tableAlign })}
       />
+      <AlignmentButtons label="内容对齐" value={tableContentAlignment} onAlign={onAlignTableContent} />
       <button type="button" aria-pressed={presentation.headerRow} onClick={() => onPresentationChange({ ...presentation, headerRow: !presentation.headerRow })}><MenuIcon name="header"/>表头行<span className="notion-menu-check">{presentation.headerRow ? "✓" : ""}</span></button>
       <button type="button" aria-pressed={presentation.headerColumn} onClick={() => onPresentationChange({ ...presentation, headerColumn: !presentation.headerColumn })}><MenuIcon name="header"/>表头列<span className="notion-menu-check">{presentation.headerColumn ? "✓" : ""}</span></button>
       <button type="button" onClick={() => onPresentationChange({ ...presentation, widths: [] })}><MenuIcon name="fit"/>适应页面宽度</button>

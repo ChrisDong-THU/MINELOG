@@ -147,21 +147,21 @@
   stroke-width: 1.4;
 }
 
-.markdown-table-resize-handle {
+.markdown-table.is-editable .markdown-table-resize-handle {
   width: 9px;
   min-height: 30px;
   cursor: col-resize;
   touch-action: none;
   transform: translateX(-4.5px);
 }
-.markdown-table-resize-handle::after {
+.markdown-table.is-editable .markdown-table-resize-handle::after {
   position: absolute;
   inset: 0 4px;
   background: transparent;
   content: "";
 }
-.markdown-table-resize-handle:hover::after,
-.markdown-table-resize-handle:focus-visible::after { background: #2383e2; }
+.markdown-table.is-editable .markdown-table-resize-handle:hover::after,
+.markdown-table.is-editable .markdown-table-resize-handle:focus-visible::after { background: #2383e2; }
 
 .notion-cell-menu-button {
   display: grid;

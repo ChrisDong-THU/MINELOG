@@ -13,17 +13,18 @@ const table = "| A | B |\n| --- | --- |\n| 1 | 2 |";
 
 test("表格样式元数据紧邻表格保存且不会改写标准表格内容", () => {
   const markdown = `${table}\n\n后续正文`;
-  const style = { widths: [180.4, 260], dark: ["1:0"], bold: ["0:0", "0:1"], align: {}, tableAlign: "center", headerRow: true, headerColumn: false };
+  const style = { widths: [180.4, 260], dark: ["1:0"], bold: ["0:0", "0:1"], align: {}, tableAlign: "center", contentAlign: "right", headerRow: true, headerColumn: false };
   const edit = writeMarkdownTableStyle(markdown, table.length, style);
 
   assert.equal(edit.markdown.startsWith(table), true);
-  assert.match(edit.markdown, /<!-- minelog-table:\{"widths":\[180,260\],"dark":\["1:0"\],"bold":\["0:0","0:1"\],"align":\{\},"tableAlign":"center","headerRow":true,"headerColumn":false\} -->/);
+  assert.match(edit.markdown, /<!-- minelog-table:\{"widths":\[180,260\],"dark":\["1:0"\],"bold":\["0:0","0:1"\],"align":\{\},"tableAlign":"center","contentAlign":"right","headerRow":true,"headerColumn":false\} -->/);
   assert.deepEqual(readMarkdownTableStyle(edit.markdown, table.length).style, {
     widths: [180, 260],
     dark: ["1:0"],
     bold: ["0:0", "0:1"],
     align: {},
     tableAlign: "center",
+    contentAlign: "right",
     headerRow: true,
     headerColumn: false,
   });
@@ -48,7 +49,7 @@ test("更新和清空表格样式时复用同一元数据位置", () => {
 
 test("单元格样式键经过校验并支持批量切换", () => {
   const normalized = normalizeMarkdownTableStyle({ widths: [12, 1200, "bad"], dark: ["2:1", "bad", "2:1"], bold: [] });
-  assert.deepEqual(normalized, { widths: [48, 800], dark: ["2:1"], bold: [], align: {}, tableAlign: "left", headerRow: true, headerColumn: false });
+  assert.deepEqual(normalized, { widths: [48, 800], dark: ["2:1"], bold: [], align: {}, tableAlign: "left", contentAlign: "left", headerRow: true, headerColumn: false });
   const keys = [markdownTableCellKey(1, 0), markdownTableCellKey(1, 1)];
   const enabled = setMarkdownTableCells(normalized, keys, "bold", true);
   assert.deepEqual(enabled.bold, ["1:0", "1:1"]);

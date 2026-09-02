@@ -4,6 +4,7 @@ export type MarkdownTableStyle = {
   bold: string[];
   align: Record<string, "left" | "center" | "right">;
   tableAlign: "left" | "center" | "right";
+  contentAlign: "left" | "center" | "right";
   headerRow: boolean;
   headerColumn: boolean;
 };
@@ -26,6 +27,7 @@ export const EMPTY_MARKDOWN_TABLE_STYLE: MarkdownTableStyle = {
   bold: [],
   align: {},
   tableAlign: "left",
+  contentAlign: "left",
   headerRow: true,
   headerColumn: false,
 };
@@ -70,6 +72,7 @@ export function normalizeMarkdownTableStyle(value: unknown): MarkdownTableStyle 
     bold: uniqueCellKeys(source.bold),
     align,
     tableAlign: source.tableAlign === "center" || source.tableAlign === "right" ? source.tableAlign : "left",
+    contentAlign: source.contentAlign === "center" || source.contentAlign === "right" ? source.contentAlign : "left",
     headerRow: source.headerRow !== false,
     headerColumn: source.headerColumn === true,
   };
@@ -105,6 +108,7 @@ function styleIsEmpty(style: MarkdownTableStyle) {
     && style.bold.length === 0
     && Object.keys(style.align).length === 0
     && style.tableAlign === "left"
+    && style.contentAlign === "left"
     && style.headerRow
     && !style.headerColumn;
 }
